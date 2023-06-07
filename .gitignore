@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 log/
 runs/
+.idea/
 # C extensions
 *.so
 
