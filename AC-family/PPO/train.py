@@ -3,7 +3,7 @@ import gym
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-# import seaborn as sns
+import seaborn as sns
 import torch
 import random
 import numpy as np
@@ -21,9 +21,10 @@ class Config:
         parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
         parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
         parser.add_argument("--seed", type=int, default=1, help="random seed")
-        parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
+        parser.add_argument("--device", type=str, default='cuda', help="pytorch device")
         parser.add_argument("--max_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
-        parser.add_argument("--train_eps", type=int, default=200, help=" Maximum number of training steps")
+        parser.add_argument("--max_episode_steps", type=int, default=int(2e3), help=" Maximum number of training steps")
+        parser.add_argument("--train_eps", type=int, default=2000, help=" Maximum number of training steps")
         parser.add_argument("--test_eps", type=int, default=20, help=" Maximum number of training steps")
         parser.add_argument("--evaluate_freq", type=float, default=5e3, help="Evaluate the policy every 'evaluate_freq' steps")
         parser.add_argument("--eval_eps", type=float, default=5, help="评估的回合数")
@@ -100,7 +101,7 @@ def train(cfg, env, agent):
         ep_reward = 0  # 记录一回合内的奖励
         ep_step = 0
         state = env.reset()  # 重置环境，返回初始状态
-        for _ in range(cfg.max_steps):
+        while ep_step < cfg.max_episode_steps:
             ep_step += 1
             action = agent.sample_action(state)  # 选择动作
             next_state, reward, done, _ = env.step(action)  # 更新环境，返回transition
@@ -110,12 +111,13 @@ def train(cfg, env, agent):
             ep_reward += reward  # 累加奖励
             if done:
                 break
-        if (i_ep+1)%cfg.eval_per_episode == 0:
+
+        if (i_ep+1) % cfg.eval_per_episode == 0:
             sum_eval_reward = 0
             for _ in range(cfg.eval_eps):
                 eval_ep_reward = 0
                 state = env.reset()
-                for _ in range(cfg.max_steps):
+                for _ in range(cfg.max_episode_steps):
                     action = agent.predict_action(state)  # 选择动作
                     next_state, reward, done, _ = env.step(action)  # 更新环境，返回transition
                     state = next_state  # 更新下一个状态
@@ -127,7 +129,7 @@ def train(cfg, env, agent):
             if mean_eval_reward >= best_ep_reward:
                 best_ep_reward = mean_eval_reward
                 output_agent = copy.deepcopy(agent)
-                print(f"回合：{i_ep+1}/{cfg.train_eps}，奖励：{ep_reward:.2f}，评估奖励：{mean_eval_reward:.2f}，最佳评估奖励：{best_ep_reward:.2f}，更新模型！")
+                print(f"回合：{i_ep+1}/{cfg.train_eps}，奖励：{ep_reward:.2f}，评估奖励：{mean_eval_reward:.2f}，最佳评估奖励：{best_ep_reward:.2f}，更新agent")
             else:
                 print(f"回合：{i_ep+1}/{cfg.train_eps}，奖励：{ep_reward:.2f}，评估奖励：{mean_eval_reward:.2f}，最佳评估奖励：{best_ep_reward:.2f}")
         steps.append(ep_step)
@@ -144,7 +146,7 @@ def test(cfg, env, agent):
         ep_reward = 0  # 记录一回合内的奖励
         ep_step = 0
         state = env.reset()  # 重置环境，返回初始状态
-        for _ in range(cfg.max_steps):
+        for _ in range(cfg.max_episode_steps):
             ep_step+=1
             action = agent.predict_action(state)  # 选择动作
             next_state, reward, done, _ = env.step(action)  # 更新环境，返回transition
@@ -159,6 +161,27 @@ def test(cfg, env, agent):
     env.close()
     return {'rewards':rewards}
 
+def smooth(data, weight=0.9):  
+    '''用于平滑曲线，类似于Tensorboard中的smooth曲线
+    '''
+    last = data[0] 
+    smoothed = []
+    for point in data:
+        smoothed_val = last * weight + (1 - weight) * point  # 计算平滑值
+        smoothed.append(smoothed_val)                    
+        last = smoothed_val                                
+    return smoothed
+
+def plot_rewards(rewards,cfg, tag='train'):
+    ''' 画图
+    '''
+    sns.set()
+    plt.figure()  # 创建一个图形实例，方便同时多画几个图
+    plt.title(f"{tag}ing curve on {cfg.device} of {cfg.algo_name} for {cfg.env_name}")
+    plt.xlabel('epsiodes')
+    plt.plot(rewards, label='rewards')
+    plt.plot(smooth(rewards), label='smoothed')
+    plt.legend()
 
 if __name__=='__main__':
     # 获取参数
@@ -166,6 +189,7 @@ if __name__=='__main__':
     # 训练
     env, agent = env_agent_config(cfg)
     best_agent, res_dic = train(cfg, env, agent)
-    
+    plot_rewards(res_dic['rewards'], cfg, tag="train")  
     # 测试
     res_dic = test(cfg, env, best_agent)
+    plot_rewards(res_dic['rewards'], cfg, tag="test")  # 画出结果

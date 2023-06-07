@@ -76,27 +76,27 @@ class Agent:
         # update policy every n steps
         if self.sample_count % self.update_freq != 0:
             return
-        # print("update policy")
+        # 从replay buffer中采样全部经验, 并转为tensor类型
         old_states, old_actions, old_log_probs, old_rewards, old_dones = self.memory.sample()
-        # convert to tensor
         old_states = torch.tensor(np.array(old_states), device=self.device, dtype=torch.float32)
         old_actions = torch.tensor(np.array(old_actions), device=self.device, dtype=torch.float32)
         old_log_probs = torch.tensor(old_log_probs, device=self.device, dtype=torch.float32)
         # monte carlo estimate of state rewards
-        returns = []
+        discounted_rewards = []
         discounted_sum = 0
         for reward, done in zip(reversed(old_rewards), reversed(old_dones)):
             if done:
                 discounted_sum = 0
             discounted_sum = reward + (self.gamma * discounted_sum)
-            returns.insert(0, discounted_sum)
+            discounted_rewards.insert(0, discounted_sum)
         # Normalizing the rewards:
-        returns = torch.tensor(returns, device=self.device, dtype=torch.float32)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-5) # 1e-5 to avoid division by zero
+        discounted_rewards = torch.tensor(discounted_rewards, device=self.device, dtype=torch.float32)
+        discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-5) # 1e-5 to avoid division by zero
         for _ in range(self.k_epochs):
             # compute advantage
-            values = self.critic(old_states) # detach to avoid backprop through the critic
-            advantage = returns - values.detach()
+            values = self.critic(old_states) 
+            # detach to avoid backprop through the critic
+            advantage = discounted_rewards - values.detach()
             # get action probabilities
             probs = self.actor(old_states)
             dist = Categorical(probs)
@@ -110,7 +110,7 @@ class Agent:
             # compute actor loss
             actor_loss = -torch.min(surr1, surr2).mean() + self.entropy_coef * dist.entropy().mean()
             # compute critic loss
-            critic_loss = (returns - values).pow(2).mean()
+            critic_loss = F.mse_loss(discounted_rewards, values)
             # take gradient step
             self.actor_optimizer.zero_grad()
             self.critic_optimizer.zero_grad()
