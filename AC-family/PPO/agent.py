@@ -38,7 +38,7 @@ class Critic(nn.Module):
         return v_s
     
 
-class Agent:
+class PPO_continuous:
     def __init__(self, cfg) -> None:
 
         self.device = torch.device(cfg.device) 
@@ -89,7 +89,7 @@ class Agent:
                 discounted_sum = 0
             discounted_sum = reward + (self.gamma * discounted_sum)
             discounted_rewards.insert(0, discounted_sum)
-        # Normalizing the rewards:
+        # Trick 1:advantage normalization
         discounted_rewards = torch.tensor(discounted_rewards, device=self.device, dtype=torch.float32)
         discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-5) # 1e-5 to avoid division by zero
         for _ in range(self.k_epochs):
@@ -110,7 +110,7 @@ class Agent:
             # compute actor loss
             actor_loss = -torch.min(surr1, surr2).mean() + self.entropy_coef * dist.entropy().mean()
             # compute critic loss
-            critic_loss = F.mse_loss(discounted_rewards, values)
+            critic_loss = F.mse_loss(discounted_rewards, values.squeeze())
             # take gradient step
             self.actor_optimizer.zero_grad()
             self.critic_optimizer.zero_grad()

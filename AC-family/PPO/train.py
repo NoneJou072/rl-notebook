@@ -7,7 +7,7 @@ import seaborn as sns
 import torch
 import random
 import numpy as np
-from agent import Agent
+from agent import PPO_continuous
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 
@@ -18,13 +18,13 @@ class Config:
     @property
     def args(self):
         parser = argparse.ArgumentParser("Hyperparameters Setting for PPO-continuous")
-        parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
+        parser.add_argument("--env_name", type=str, default="Walker2d-v2", help="env name")
         parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
         parser.add_argument("--seed", type=int, default=1, help="random seed")
         parser.add_argument("--device", type=str, default='cuda', help="pytorch device")
         parser.add_argument("--max_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
-        parser.add_argument("--max_episode_steps", type=int, default=int(2e3), help=" Maximum number of training steps")
-        parser.add_argument("--train_eps", type=int, default=2000, help=" Maximum number of training steps")
+        parser.add_argument("--max_episode_steps", type=int, default=int(1e3), help=" Maximum number of training steps")
+        parser.add_argument("--train_eps", type=int, default=int(3e3), help=" Maximum number of training steps")
         parser.add_argument("--test_eps", type=int, default=20, help=" Maximum number of training steps")
         parser.add_argument("--evaluate_freq", type=float, default=5e3, help="Evaluate the policy every 'evaluate_freq' steps")
         parser.add_argument("--eval_eps", type=float, default=5, help="评估的回合数")
@@ -44,7 +44,6 @@ class Config:
         parser.add_argument("--k_epochs", type=int, default=10, help="PPO parameter, 更新策略网络的次数")
 
         # Optim 10 tricks， reference by https://zhuanlan.zhihu.com/p/512327050
-        parser.add_argument("--use_adv_norm", type=bool, default=True, help="Trick 1:advantage normalization")
         parser.add_argument("--use_state_norm", type=bool, default=True, help="Trick 2:state normalization")
         parser.add_argument("--use_reward_norm", type=bool, default=False, help="Trick 3:reward normalization")
         parser.add_argument("--use_reward_scaling", type=bool, default=True, help="Trick 4:reward scaling")
@@ -79,12 +78,14 @@ def env_agent_config(cfg):
     env = gym.make(cfg.env_name) # 创建环境
     all_seed(env, seed=cfg.seed)
     n_states = env.observation_space.shape[0]
-    n_actions = env.action_space.n
+    n_actions = env.action_space.shape[0]
+    max_ep_steps = env._max_episode_steps
+    print(f"max_ep_steps:{max_ep_steps}")
     print(f"状态空间维度：{n_states}，动作空间维度：{n_actions}")
     # 更新n_states和n_actions到cfg参数中
     setattr(cfg, 'n_states', n_states)
     setattr(cfg, 'n_actions', n_actions) 
-    agent = Agent(cfg)
+    agent = PPO_continuous(cfg)
     return env, agent
 
 def train(cfg, env, agent):
@@ -182,6 +183,7 @@ def plot_rewards(rewards,cfg, tag='train'):
     plt.plot(rewards, label='rewards')
     plt.plot(smooth(rewards), label='smoothed')
     plt.legend()
+    plt.show()
 
 if __name__=='__main__':
     # 获取参数
