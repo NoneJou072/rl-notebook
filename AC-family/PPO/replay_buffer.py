@@ -37,6 +37,8 @@ class ReplayBuffer:
 
 import random
 from collections import deque
+
+
 class ReplayBufferQue:
     '''DQN的经验回放池，每次采样batch_size个样本'''
     def __init__(self, capacity: int) -> None:
@@ -63,10 +65,21 @@ class ReplayBufferQue:
         
     def clear(self):
         self.buffer.clear()
+    
+    def sample_tensor(self, device):
+        s, a, a_logprob, s_, r, done = self.sample()
+        s = torch.tensor(np.array(s), device=device, dtype=torch.float)
+        a = torch.tensor(np.array(a), device=device, dtype=torch.float)
+        a_logprob = torch.tensor(np.array(a_logprob), device=device, dtype=torch.float)
+        s_ = torch.tensor(np.array(s_), device=device, dtype=torch.float)
+        r = torch.tensor(r, device=device, dtype=torch.float)
+        done = torch.tensor(done, device=device, dtype=torch.float)
+
+        return s, a, a_logprob, s_, r, done
 
     def __len__(self):
         return len(self.buffer)
-
+        
 
 class PGReplay(ReplayBufferQue):
     '''PG的经验回放池，每次采样所有样本，因此只需要继承ReplayBufferQue，重写sample方法即可
