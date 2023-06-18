@@ -40,7 +40,7 @@ from collections import deque
 
 
 class ReplayBufferQue:
-    '''DQN的经验回放池，每次采样batch_size个样本'''
+    '''DQN的经验回放池, 每次采样batch_size个样本'''
     def __init__(self, capacity: int) -> None:
         self.capacity = capacity
         self.buffer = deque(maxlen=self.capacity)
@@ -82,11 +82,8 @@ class ReplayBufferQue:
         
 
 class PGReplay(ReplayBufferQue):
-    '''PG的经验回放池，每次采样所有样本，因此只需要继承ReplayBufferQue，重写sample方法即可
-    '''
-    def __init__(self):
-        self.buffer = deque()
-        
+    '''PG的经验回放池, 每次采样所有样本, 因此只需要继承ReplayBufferQue, 重写sample方法即可
+    '''        
     def sample(self):
         ''' sample all the transitions
         '''

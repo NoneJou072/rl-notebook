@@ -31,7 +31,7 @@ class Config:
         parser.add_argument("--test_eps", type=int, default=20, help=" Maximum number of training steps")
         parser.add_argument("--evaluate_freq", type=float, default=5e3, help="Evaluate the policy every 'evaluate_freq' steps")
         parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
-        parser.add_argument("--update_freq", type=int, default=2048, help="Update frequency")
+        parser.add_argument("--update_freq", type=int, default=64, help="Update frequency")
         parser.add_argument("--batch_size", type=int, default=2048, help="Batch size")
         parser.add_argument("--mini_batch_size", type=int, default=64, help="Minibatch size")
         parser.add_argument("--actor_hidden_dim", type=int, default=64, help="The number of neurons in hidden layers of the neural network")
@@ -100,7 +100,7 @@ def env_agent_config(cfg):
     max_ep_steps = env._max_episode_steps
     max_action = env.action_space.high[0]
     print(f"max_ep_steps:{max_ep_steps}")
-    print(f"状态空间维度：{n_states}，动作空间维度：{n_actions}")
+    print(f"state dim:{n_states}, action dim:{n_actions}, max action:{max_action}")
     
     # 更新n_states, max_action和n_actions到cfg参数中
     setattr(cfg, 'n_states', n_states)
@@ -141,7 +141,9 @@ def train(cfg, env, agent):
             agent.memory.push((state, action, agent.log_probs, next_state, reward, done))  # 保存transition
             state = next_state  # 更新下一个状态
             
-            agent.update()  # 更新智能体
+            # update policy every n steps
+            if agent.sample_count % agent.update_freq == 0:
+                agent.update()
             ep_reward += reward  # 累加奖励
 
         if total_steps % cfg.evaluate_freq == 0:

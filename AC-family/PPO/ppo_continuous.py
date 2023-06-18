@@ -53,7 +53,7 @@ class PPO_continuous:
         self.device = torch.device(cfg.device) 
         self.gamma = cfg.gamma 
         self.gae_lambda = cfg.gae_lambda
-        self.memory = PGReplay()
+        self.memory = PGReplay(capacity=2048)
         self.k_epochs = cfg.k_epochs # update policy for K epochs
         self.eps_clip = cfg.eps_clip # clip parameter for PPO
         self.entropy_coef = cfg.entropy_coef # entropy coefficient
@@ -87,12 +87,10 @@ class PPO_continuous:
         return a
     
     def update(self):
-        # update policy every n steps
-        if self.sample_count % self.update_freq != 0:
-            return
         # 从replay buffer中采样全部经验, 并转为tensor类型
         old_states, old_actions, old_log_probs, new_states, old_rewards, old_dones = self.memory.sample_tensor(self.device)
         
+        adv = []
         with torch.no_grad(): # adv and v_target have no gradient
             # 计算状态价值
             values = self.critic(old_states) 
@@ -100,7 +98,6 @@ class PPO_continuous:
             # 计算TD误差
             deltas = old_rewards +  self.gamma * values - new_values
             # 计算广义优势
-            adv = []
             gae = 0
             for delta, done in zip(reversed(deltas.flatten().cpu().numpy()), reversed(old_dones.flatten().cpu().numpy())):
                 gae = delta + self.gamma * self.gae_lambda * (1 - done) * gae
