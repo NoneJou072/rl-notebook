@@ -1,10 +1,9 @@
-import gym
 import os
+import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-import random
 from ppo_continuous import PPO_continuous
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -18,13 +17,12 @@ local_path = os.path.dirname(__file__)
 
 
 class Config:
-    @property
-    def args(self):
+    def __call__(self, *args, **kwargs):
         # Env Params
         parser = argparse.ArgumentParser("Hyperparameters Setting for PPO-continuous")
         parser.add_argument("--env_name", type=str, default="Walker2d-v2", help="env name")
         parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
-        parser.add_argument("--seed", type=int, default=1, help="random seed")
+        parser.add_argument("--seed", type=int, default=10, help="random seed")
         parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
         # Training Params
         parser.add_argument("--max_train_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
@@ -58,26 +56,26 @@ class Config:
         parser.add_argument("--set_adam_eps", type=float, default=True, help="Trick 9: set Adam epsilon=1e-5")
         parser.add_argument("--use_tanh", type=float, default=True, help="Trick 10: tanh activation function")
 
-        args = parser.parse_args()
-        return args
+        return parser.parse_args()
 
 
 def evaluate_policy(args, env, agent, state_norm):
     times = 3
     evaluate_reward = 0
     for _ in range(times):
-        s = env.reset()
+        s, _ = env.reset(seed=args.seed)
         if args.use_state_norm:
             s = state_norm(s, update=False)  # During the evaluating,update=False
-        done = False
         episode_reward = 0
-        while not done:
+        while True:
             action = agent.evaluate(s)  # We use the deterministic policy during the evaluating
-            s_, r, done, _ = env.step(action)
+            s_, r, terminated, truncated, _ = env.step(action)
             if args.use_state_norm:
                 s_ = state_norm(s_, update=False)
             episode_reward += r
             s = s_
+            if terminated or truncated:
+                break
         evaluate_reward += episode_reward
 
     return evaluate_reward / times
@@ -87,12 +85,9 @@ def all_seed(env, env_evaluate, seed=10):
     """ 配置seed """
     if seed == 0:
         return
-    env.seed(seed)  # env config
     env.action_space.seed(seed)
-    env_evaluate.seed(seed)
     env_evaluate.action_space.seed(seed)
     np.random.seed(seed)
-    random.seed(seed)
     torch.manual_seed(seed)  # config for CPU
     torch.cuda.manual_seed(seed)  # config for GPU
     os.environ['PYTHONHASHSEED'] = str(seed)  # config for python scripts
@@ -106,9 +101,7 @@ def env_agent_config(cfg):
     env, env_evaluate = all_seed(env, env_evaluate, seed=cfg.seed)
     n_states = env.observation_space.shape[0]
     n_actions = env.action_space.shape[0]
-    max_ep_steps = env._max_episode_steps
     max_action = env.action_space.high[0]
-    print(f"max_ep_steps:{max_ep_steps}")
     print(f"state dim:{n_states}, action dim:{n_actions}, max action:{max_action}")
 
     # 更新n_states, max_action和n_actions到cfg参数中
@@ -120,8 +113,8 @@ def env_agent_config(cfg):
     return env, env_evaluate, agent
 
 
-def train(cfg, env, env_evaluate, agent):
-    ''' 训练 '''
+def train(cfg, env: gym.Env, env_evaluate: gym.Env, agent):
+    """ 训练 """
     print("开始训练！")
 
     total_steps = 0
@@ -136,34 +129,26 @@ def train(cfg, env, env_evaluate, agent):
     state_norm = Normalization(shape=cfg.n_states)  # Trick 2:state normalization
 
     while total_steps < cfg.max_train_steps:
-        s = env.reset()  # 重置环境，返回初始状态
+        s, _ = env.reset(seed=cfg.seed)  # 重置环境，返回初始状态
         # ep_reward = 0  # 记录一回合内的奖励
         ep_step = 0
-        done = False
-        while not done:
+        while True:
             ep_step += 1
 
             a, a_logprob = agent.sample_action(s)  # 选择动作
-            s_, r, done, _ = env.step(a)  # 更新环境，返回transition
+            s_, r, terminated, truncated, _ = env.step(a)  # 更新环境，返回transition
 
-            # if done is False and ep_step == cfg.max_episode_steps:
-            #     done = True
-            # When dead or win or reaching the max_episode_steps, done will be Ture, we need to distinguish them;
-            # dw means dead or win,there is no next state s';
-            # but when reaching the max_episode_steps,there is a next state s' actually.
-            if done and ep_step != cfg.max_episode_steps:
-                dw = True
-            else:
-                dw = False
+            if ep_step == cfg.max_episode_steps:
+                truncated = True
+
             # 保存transition
-            agent.memory.push((s, a, a_logprob, s_, r, dw, done))
+            agent.memory.push((s, a, a_logprob, s_, r, terminated, truncated))
             s = s_  # 更新下一个状态
             total_steps += 1
 
             # update policy every n steps
             if agent.sample_count % cfg.buffer_size == 0:
                 agent.update()
-                agent.memory.count = 0
 
             # ep_reward += reward  # 累加奖励
 
@@ -179,11 +164,12 @@ def train(cfg, env, env_evaluate, agent):
                                              './data_train/PPO_continuous_env_{}_number_{}_seed_{}.npy'.format(
                                                  cfg.env_name, 1, 10))
                     np.save(model_dir, np.array(evaluate_rewards))
-
+            if terminated or truncated:
+                break
         # rewards.append(ep_reward)
     print("完成训练！")
     env.close()
-    return env.agent, {'rewards': evaluate_rewards}
+    return agent, {'rewards': evaluate_rewards}
 
 
 # def test(cfg, env, agent):
@@ -211,8 +197,8 @@ def train(cfg, env, env_evaluate, agent):
 
 
 def smooth(data, weight=0.9):
-    '''用于平滑曲线, 类似于Tensorboard中的smooth曲线
-    '''
+    """用于平滑曲线, 类似于Tensorboard中的smooth曲线
+    """
     last = data[0]
     smoothed = []
     for point in data:
@@ -223,8 +209,8 @@ def smooth(data, weight=0.9):
 
 
 def plot_rewards(rewards, cfg, tag='train'):
-    ''' 画图
-    '''
+    """ 画图
+    """
     sns.set()
     plt.figure()  # 创建一个图形实例，方便同时多画几个图
     plt.title(f"{tag}ing curve on {cfg.device} of {cfg.algo_name} for {cfg.env_name}")
@@ -236,9 +222,7 @@ def plot_rewards(rewards, cfg, tag='train'):
 
 
 if __name__ == '__main__':
-    # 获取参数
-    cfg = Config().args
-    # 训练
+    cfg = Config().__call__()
     env, env_evaluate, agent = env_agent_config(cfg)
     best_agent, res_dic = train(cfg, env, env_evaluate, agent)
     plot_rewards(res_dic['rewards'], cfg, tag="train")

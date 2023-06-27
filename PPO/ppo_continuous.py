@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from replay_buffer import PGReplay
+from utils.replay_buffer import PGReplay
 
 
 class Actor(nn.Module):
@@ -91,7 +91,7 @@ class PPO_continuous:
 
     def update(self):
         # 从replay buffer中采样全部经验
-        old_states, old_actions, old_log_probs, new_states, r, dw, done = self.memory.sample_tensor(self.device)
+        old_states, old_actions, old_log_probs, new_states, r, terminated, done = self.memory.sample_tensor(self.device)
         adv = []
         gae = 0
         with torch.no_grad():  # adv and v_target have no gradient
@@ -99,7 +99,7 @@ class PPO_continuous:
             values = self.critic(old_states)
             new_values = self.critic(new_states)
             # 计算TD误差, 注意这里的维度
-            deltas = r + self.gamma * (1.0 - dw) * new_values - values
+            deltas = r + self.gamma * (1.0 - terminated) * new_values - values
             # 计算广义优势
             for delta, d in zip(reversed(deltas.flatten().numpy()),
                                 reversed(done.flatten().numpy())):
