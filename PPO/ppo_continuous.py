@@ -3,7 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from utils.replay_buffer import PGReplay
+from utils.replay_buffer import ReplayBuffer
+from utils.ContinuesBase import ContinuesBase
 
 
 class Actor(nn.Module):
@@ -14,9 +15,9 @@ class Actor(nn.Module):
     def __init__(self, args) -> None:
         super().__init__()
         self.max_action = args.max_action
-        self.fc1 = nn.Linear(args.n_states, args.actor_hidden_dim)
-        self.fc2 = nn.Linear(args.actor_hidden_dim, args.actor_hidden_dim)
-        self.fc3 = nn.Linear(args.actor_hidden_dim, args.n_actions)
+        self.fc1 = nn.Linear(args.n_states, args.hidden_dim)
+        self.fc2 = nn.Linear(args.hidden_dim, args.hidden_dim)
+        self.fc3 = nn.Linear(args.hidden_dim, args.n_actions)
         self.log_std = nn.Parameter(
             torch.zeros(1, args.n_actions))  # We use 'nn.Parameter' to train log_std automatically
 
@@ -42,9 +43,9 @@ class Critic(nn.Module):
     """
     def __init__(self, args):
         super().__init__()
-        self.fc1 = nn.Linear(args.n_states, args.critic_hidden_dim)
-        self.fc2 = nn.Linear(args.critic_hidden_dim, args.critic_hidden_dim)
-        self.fc3 = nn.Linear(args.critic_hidden_dim, 1)
+        self.fc1 = nn.Linear(args.n_states, args.hidden_dim)
+        self.fc2 = nn.Linear(args.hidden_dim, args.hidden_dim)
+        self.fc3 = nn.Linear(args.hidden_dim, 1)
 
     def forward(self, s):
         s = F.relu(self.fc1(s))
@@ -53,45 +54,45 @@ class Critic(nn.Module):
         return v_s
 
 
-class PPO_continuous:
-    def __init__(self, cfg) -> None:
+class PPO_continuous(ContinuesBase):
+    def __init__(self, args) -> None:
+        super().__init__(args)
+        self.device = torch.device(args.device)
+        self.gamma = args.gamma
+        self.gae_lambda = args.gae_lambda
+        self.k_epochs = args.k_epochs  # update policy for K epochs
+        self.eps_clip = args.eps_clip  # clip parameter for PPO
+        self.entropy_coef = args.entropy_coef  # entropy coefficient
+        self.buffer_size = args.buffer_size
+        self.mini_batch_size = args.mini_batch_size
+        self.max_action = args.max_action
+        self.lr_a = args.actor_lr  # Learning rate of actor
+        self.lr_c = args.critic_lr  # Learning rate of critic
+        self.max_train_steps = args.max_train_steps
 
-        self.device = torch.device(cfg.device)
-        self.gamma = cfg.gamma
-        self.gae_lambda = cfg.gae_lambda
-        self.k_epochs = cfg.k_epochs  # update policy for K epochs
-        self.eps_clip = cfg.eps_clip  # clip parameter for PPO
-        self.entropy_coef = cfg.entropy_coef  # entropy coefficient
-        self.sample_count = 0
-        self.buffer_size = cfg.buffer_size
-        self.mini_batch_size = cfg.mini_batch_size
-        self.max_action = cfg.max_action
+        self.memory = ReplayBuffer(capacity=self.buffer_size)
 
-        self.memory = PGReplay(capacity=self.buffer_size)
+        self.actor = Actor(args).to(self.device)
+        self.critic = Critic(args).to(self.device)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=args.actor_lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=args.critic_lr)
 
-        self.actor = Actor(cfg).to(self.device)
-        self.critic = Critic(cfg).to(self.device)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=cfg.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=cfg.critic_lr)
-
-    def sample_action(self, s):
-        self.sample_count += 1
+    def sample_action(self, s, deterministic=False):
         s = torch.unsqueeze(torch.tensor(s, dtype=torch.float), 0)
-        with torch.no_grad():
-            dist = self.actor.get_dist(s)
-            a = dist.sample()
-            a = torch.clamp(a, -self.max_action, self.max_action)
-            a_logprob = dist.log_prob(a)
-        return a.numpy().flatten(), a_logprob.numpy().flatten()
+        if deterministic:
+            a = self.actor.forward(s)
+            return a.detach().numpy().flatten()
+        else:
+            with torch.no_grad():
+                dist = self.actor.get_dist(s)
+                a = dist.sample()
+                a = torch.clamp(a, -self.max_action, self.max_action)
+                a_logprob = dist.log_prob(a)
+            return a.numpy().flatten(), a_logprob.numpy().flatten()
 
-    def evaluate(self, s):  # When evaluating the policy, we only use the mean
-        s = torch.unsqueeze(torch.tensor(s, dtype=torch.float), 0)
-        a = self.actor(s).detach().numpy().flatten()
-        return a
-
-    def update(self):
+    def update(self, total_steps=0):
         # 从replay buffer中采样全部经验
-        old_states, old_actions, old_log_probs, new_states, r, terminated, done = self.memory.sample_tensor(self.device)
+        old_states, old_actions, old_log_probs, new_states, r, terminated, done = self.memory.sample()
         adv = []
         gae = 0
         with torch.no_grad():  # adv and v_target have no gradient
@@ -124,10 +125,11 @@ class PPO_continuous:
                 # compute surrogate loss
                 surr1 = ratio * adv[index]
                 surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * adv[index]
-                # compute actor loss
+                # compute actor loss, using policy entropy
                 actor_loss = -torch.min(surr1, surr2) - self.entropy_coef * dist_entropy
                 self.actor_optimizer.zero_grad()
                 actor_loss.mean().backward()
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 0.5)
                 self.actor_optimizer.step()
 
                 # compute critic loss
@@ -136,4 +138,15 @@ class PPO_continuous:
                 # take gradient step
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 0.5)
                 self.critic_optimizer.step()
+
+        self.lr_decay(total_steps)
+
+    def lr_decay(self, total_steps):
+        lr_a_now = self.lr_a * (1 - total_steps / self.max_train_steps)
+        lr_c_now = self.lr_c * (1 - total_steps / self.max_train_steps)
+        for p in self.actor_optimizer.param_groups:
+            p['lr'] = lr_a_now
+        for p in self.critic_optimizer.param_groups:
+            p['lr'] = lr_c_now

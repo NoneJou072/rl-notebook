@@ -4,8 +4,8 @@ import random
 from collections import deque
 
 
-class ReplayBufferQue:
-    """ DQN的经验回放池, 每次采样 batch_size 个样本 """
+class ReplayBuffer:
+    """ 经验回放池, 每次采样 batch_size 个样本 """
     def __init__(self, capacity: int) -> None:
         self.capacity = capacity
         self.buffer = deque(maxlen=self.capacity)
@@ -16,36 +16,18 @@ class ReplayBufferQue:
         """
         self.buffer.append(transitions)
 
-    def sample(self, batch_size: int, sequential: bool = False):
-        if batch_size > len(self.buffer):
+    def sample(self, batch_size: int = None, sequential: bool = True):
+        if batch_size is None or batch_size > len(self.buffer):
             batch_size = len(self.buffer)
+
         if sequential:  # sequential sampling
             rand = random.randint(0, len(self.buffer) - batch_size)
             batch = [self.buffer[i] for i in range(rand, rand + batch_size)]
-            return zip(*batch)
         else:
             batch = random.sample(self.buffer, batch_size)
-            return zip(*batch)
 
-    def clear(self):
-        self.buffer.clear()
+        s, a, a_logprob, s_, r, dw, done = zip(*batch)
 
-    def __len__(self):
-        return len(self.buffer)
-
-
-class PGReplay(ReplayBufferQue):
-    """ 策略梯度的经验回放池, 每次采样时采样所有样本 """
-    def __init__(self, capacity: int):
-        super(PGReplay, self).__init__(capacity)
-
-    def sample(self):
-        """ sample all the transitions """
-        batch = list(self.buffer)
-        return zip(*batch)
-
-    def sample_tensor(self, device):
-        s, a, a_logprob, s_, r, dw, done = self.sample()
         s = torch.tensor(np.asarray(s), dtype=torch.float)
         a = torch.tensor(np.asarray(a), dtype=torch.float)
         a_logprob = torch.tensor(np.asarray(a_logprob), dtype=torch.float)
@@ -55,3 +37,9 @@ class PGReplay(ReplayBufferQue):
         done = torch.tensor(np.asarray(done).reshape((self.capacity, 1)), dtype=torch.float)
 
         return s, a, a_logprob, s_, r, dw, done
+
+    def clear(self):
+        self.buffer.clear()
+
+    def __len__(self):
+        return len(self.buffer)
