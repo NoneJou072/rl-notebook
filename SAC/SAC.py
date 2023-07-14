@@ -70,13 +70,18 @@ class SAC(ContinuesBase):
     def __init__(self, args):
         super(SAC, self).__init__(args)
         self.tau = None
-        self.alpha = args.alpha
+        self.lr = args.lr
         self.gamma = args.gamma  # discount factor
         self.max_action = args.max_action
 
         self.batch_size = args.batch_size
         self.buffer_size = args.buffer_size
         self.memory = ReplayBuffer(self.buffer_size)
+
+        self.target_entropy = args.action_dim
+        self.log_alpha = torch.zeros(1, requires_grad=True)
+        self.alpha = self.log_alpha.exp()
+        self.alpha_optimizer = torch.optim.Adam(self.log_alpha, self.lr)
 
         self.actor = Actor(args)
         self.critic = Critic(args)
@@ -114,6 +119,16 @@ class SAC(ContinuesBase):
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
+
+        # Compute temperature loss
+        # We learn log_alpha instead of alpha to ensure that alpha=exp(log_alpha)>0
+        alpha_loss = -(self.log_alpha.exp() * (log_pi + self.target_entropy).detach()).mean()
+        self.alpha_optimizer.zero_grad()
+        alpha_loss.backward()
+        self.alpha_optimizer.step()
+        # Update alpha
+        self.alpha = self.log_alpha.exp()
+
 
         # Softly update target networks
         for param, target_param in zip(self.critic.parameters(), self.target_critic.parameters()):
