@@ -57,6 +57,7 @@ class Critic(nn.Module):
 class PPO_continuous(ContinuesBase):
     def __init__(self, args) -> None:
         super().__init__(args)
+        self.agent_name = 'PPO_continuous'
         self.device = torch.device(args.device)
         self.gamma = args.gamma
         self.gae_lambda = args.gae_lambda

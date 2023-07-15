@@ -1,18 +1,15 @@
 import os
-import gymnasium as gym
 import numpy as np
 import torch
 from ppo_continuous import PPO_continuous
-from utils.ContinuesBase import ContinuesBase
+from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
-from normalization import Normalization, RewardScaling
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-print(torch.version.cuda)  # 打印CUDA版本
-print(torch.cuda.is_available())  # 检查CUDA是否可用
+from utils.normalization import Normalization
+import gymnasium as gym
 
 local_path = os.path.dirname(__file__)
+log_path = os.path.join(local_path, 'log')
 
 
 class Config:
@@ -55,118 +52,87 @@ class Config:
         return parser.parse_args()
 
 
-def evaluate_policy(args, env, agent: ContinuesBase, state_norm):
-    times = 3
-    evaluate_reward = 0
-    for _ in range(times):
-        s, _ = env.reset(seed=args.seed)
-        if args.use_state_norm:
-            s = state_norm(s, update=False)  # During the evaluating,update=False
-        episode_reward = 0
-        while True:
-            action = agent.sample_action(s, deterministic=True)  # We use the deterministic policy during the evaluating
-            s_, r, terminated, truncated, _ = env.step(action)
-            if args.use_state_norm:
-                s_ = state_norm(s_, update=False)
-            episode_reward += r
-            s = s_
-            if terminated or truncated:
-                break
-        evaluate_reward += episode_reward
+class PPOContinuousModel(ModelBase):
+    def __init__(self, env, args):
+        super().__init__(env, args)
+        self.agent = PPO_continuous(args)
+        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
 
-    return evaluate_reward / times
+    def train(self):
+        """ 训练 """
+        print("开始训练！")
+
+        total_steps = 0
+        evaluate_num = 0
+        sample_count = 0
+        evaluate_rewards = []  # 记录每回合的奖励
+
+        # Tensorboard config
+        log_dir = os.path.join(log_path, f'./runs/{self.model_name}')
+        writer = SummaryWriter(log_dir=log_dir)
+
+        while total_steps < self.args.max_train_steps:
+            s, _ = self.env.reset(seed=self.args.seed)  # 重置环境，返回初始状态
+            ep_step = 0
+            while True:
+                ep_step += 1
+                sample_count += 1
+                a, a_logprob = self.agent.sample_action(s)  # 选择动作
+                s_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
+
+                if ep_step == self.args.max_episode_steps:
+                    truncated = True
+
+                # 保存transition
+                self.agent.memory.push((s, a, a_logprob, s_, r, terminated, truncated))
+                s = s_  # 更新下一个状态
+                total_steps += 1
+
+                # update policy every n steps
+                if sample_count % self.args.buffer_size == 0:
+                    self.agent.update(total_steps)
+
+                if total_steps % self.args.evaluate_freq == 0:
+                    evaluate_num += 1
+                    evaluate_reward = self.evaluate_policy()
+                    evaluate_rewards.append(evaluate_reward)
+                    print("evaluate_num:{} \t evaluate_reward:{} \t".format(evaluate_num, evaluate_reward))
+                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_rewards[-1],
+                                      global_step=total_steps)
+                    # Save the rewards
+                    if evaluate_num % self.args.save_freq == 0:
+                        model_dir = os.path.join(log_path, f'./data_train/{self.agent.agent_name}')
+                        if not os.path.exists(model_dir):
+                            os.makedirs(model_dir)
+                        np.save(os.path.join(model_dir, f'{self.model_name}.npy'), np.array(evaluate_rewards))
+                if terminated or truncated:
+                    break
+
+        print("完成训练！")
+        self.env.close()
 
 
-def set_seed(env, env_evaluate, seed=10):
-    """ 配置seed """
-    if seed == 0:
-        return
-    env.action_space.seed(seed)
-    env_evaluate.action_space.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)  # config for CPU
-    torch.cuda.manual_seed(seed)  # config for GPU
-    os.environ['PYTHONHASHSEED'] = str(seed)  # config for python scripts
-    return env, env_evaluate
-
-
-def env_agent_config(cfg):
+def make_env(args):
     """ 配置智能体和环境 """
-    env = gym.make(cfg.env_name)  # 创建环境
-    env_evaluate = gym.make(cfg.env_name)  # env for evaluate
-    env, env_evaluate = set_seed(env, env_evaluate, seed=cfg.seed)
+    env = gym.make(args.env_name)  # 创建环境
     n_states = env.observation_space.shape[0]
     n_actions = env.action_space.shape[0]
     max_action = env.action_space.high[0]
     print(f"state dim:{n_states}, action dim:{n_actions}, max action:{max_action}")
 
     # 更新n_states, max_action和n_actions到cfg参数中
-    setattr(cfg, 'n_states', n_states)
-    setattr(cfg, 'n_actions', n_actions)
-    setattr(cfg, 'max_action', max_action)
+    setattr(args, 'n_states', n_states)
+    setattr(args, 'n_actions', n_actions)
+    setattr(args, 'max_action', max_action)
 
-    agent = PPO_continuous(cfg)
-    return env, env_evaluate, agent
-
-
-def train(cfg, env: gym.Env, env_evaluate: gym.Env, agent: ContinuesBase):
-    """ 训练 """
-    print("开始训练！")
-
-    total_steps = 0
-    evaluate_num = 0
-    sample_count = 0
-    evaluate_rewards = []  # 记录每回合的奖励
-
-    # Tensorboard config
-    log_dir = os.path.join(local_path,
-                           './runs/PPO_continuous/env_{}_number_{}_seed_{}'.format(cfg.env_name, 1, cfg.seed))
-    writer = SummaryWriter(log_dir=log_dir)
-
-    state_norm = Normalization(shape=cfg.n_states)  # Trick 2:state normalization
-
-    while total_steps < cfg.max_train_steps:
-        s, _ = env.reset(seed=cfg.seed)  # 重置环境，返回初始状态
-        ep_step = 0
-        while True:
-            ep_step += 1
-            sample_count += 1
-            a, a_logprob = agent.sample_action(s)  # 选择动作
-            s_, r, terminated, truncated, _ = env.step(a)  # 更新环境，返回transition
-
-            if ep_step == cfg.max_episode_steps:
-                truncated = True
-
-            # 保存transition
-            agent.memory.push((s, a, a_logprob, s_, r, terminated, truncated))
-            s = s_  # 更新下一个状态
-            total_steps += 1
-
-            # update policy every n steps
-            if sample_count % cfg.buffer_size == 0:
-                agent.update(total_steps)
-
-            if total_steps % cfg.evaluate_freq == 0:
-                evaluate_num += 1
-                evaluate_reward = evaluate_policy(cfg, env_evaluate, agent, state_norm)
-                evaluate_rewards.append(evaluate_reward)
-                print("evaluate_num:{} \t evaluate_reward:{} \t".format(evaluate_num, evaluate_reward))
-                writer.add_scalar('step_rewards_{}'.format(cfg.env_name), evaluate_rewards[-1], global_step=total_steps)
-                # Save the rewards
-                if evaluate_num % cfg.save_freq == 0:
-                    model_dir = os.path.join(local_path,
-                                             './data_train/PPO_continuous_env_{}_number_{}_seed_{}.npy'.format(
-                                                 cfg.env_name, 1, 10))
-                    np.save(model_dir, np.array(evaluate_rewards))
-            if terminated or truncated:
-                break
-
-    print("完成训练！")
-    env.close()
-    return agent, {'rewards': evaluate_rewards}
+    return env
 
 
 if __name__ == '__main__':
-    cfg = Config().__call__()
-    env, env_evaluate, agent = env_agent_config(cfg)
-    best_agent, res_dic = train(cfg, env, env_evaluate, agent)
+    args = Config().__call__()
+    env = make_env(args)
+    model = PPOContinuousModel(
+        env=env,
+        args=args,
+    )
+    model.train()

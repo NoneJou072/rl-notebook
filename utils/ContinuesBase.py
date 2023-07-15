@@ -1,7 +1,8 @@
 
 class ContinuesBase:
-    def __init__(self, cfg) -> None:
+    def __init__(self, args) -> None:
         self.memory = None
+        self.agent_name = None
 
     def sample_action(self, s, deterministic=False):
         raise NotImplementedError
