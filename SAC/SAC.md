@@ -1,6 +1,6 @@
 # SAC
 Soft Actor-Critic (SAC) 是一个免模型(model-free)、异策略(off-policy)的深度强化学习算法。
-![](../assets//440edaeb10df4818ad80c2437a2d4b4a31b74e47e1034d6c82608522ebba5314.bmp)  
+![](../assets/440edaeb10df4818ad80c2437a2d4b4a31b74e47e1034d6c82608522ebba5314.bmp)  
 伪代码解释：
 在每一步中，我们使用当前的策略去采样动作
 
@@ -9,9 +9,11 @@ Soft Actor-Critic (SAC) 是一个免模型(model-free)、异策略(off-policy)�
 ## Entropy
 ### A. 熵正则化
 在信息论中，熵([entropy](https://en.wikipedia.org/wiki/Entropy_(information_theory)))体现了变量可能的结果的不确定性。在强化学习中，熵体现为策略的随机性。假设 x 的熵 H 是从分布 P 采样的，则熵表示为  
+
 $$
- H(P):=-\sum_{x \in P}p(x)\log{p(x)}=\mathbb{E}_{x\sim P}[-\log{P(x)}]
+H(P):=-\sum_{x \in P}p(x)\log{p(x)}=\mathbb{E}_{x\sim P}[-\log{P(x)}]
 $$
+
 在强化学习中，我们使用 $H(\pi (\cdot \mid s))$ 来表示策略 $\pi$ 在状态 s 下的随机程度。  
 **最大熵强化学习（maximum entropy RL）** 的思想就是除了要最大化累积奖励，还要使得策略更加随机。如此，策略函数的目标中就加入了一项熵的正则项，定义为
 $$

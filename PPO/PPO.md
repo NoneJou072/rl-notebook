@@ -7,7 +7,7 @@
 
 在策略梯度中，演员与环境交互搜集数据，产生很多的轨迹 τ，根据搜集到的数据按照策略梯度的公式更新策略的参数，所以策略梯度是一个同策略的算法。PPO 是策略梯度的变形，也是同策略的算法。
 $$
-\bigtriangledown \bar{R}_\theta =\mathbb{E}_{\tau \sim p_\theta (\tau )}[R(\tau )\bigtriangledown \log p_\theta (\tau )] 
+\bigtriangledown \bar{R}_\theta =\mathbb{E}_{\tau \sim p_\theta (\tau )}[R(\tau )\bigtriangledown \log p_\theta (\tau )]
 $$
 ## 2. PPO实现
 repo：https://github.com/NoneJou072/rl-notebook  

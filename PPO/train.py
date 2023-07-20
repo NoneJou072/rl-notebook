@@ -16,7 +16,7 @@ class Config:
     def __call__(self, *args, **kwargs):
         # Env Params
         parser = argparse.ArgumentParser("Hyperparameters Setting for PPO-continuous")
-        parser.add_argument("--env_name", type=str, default="Walker2d-v2", help="env name")
+        parser.add_argument("--env_name", type=str, default="Walker2d-v4", help="env name")
         parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
         parser.add_argument("--seed", type=int, default=10, help="random seed")
         parser.add_argument("--device", type=str, default='cpu', help="pytorch device")

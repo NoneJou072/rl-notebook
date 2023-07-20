@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from SAC import SAC
+from DQN import DQN
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -13,38 +13,59 @@ log_path = os.path.join(local_path, 'log')
 class Config:
     def __call__(self, *args, **kwargs):
         # Env Params
-        parser = argparse.ArgumentParser("Hyperparameters Setting for SAC")
-        parser.add_argument("--env_name", type=str, default="Walker2d-v2", help="env name")
-        parser.add_argument("--algo_name", type=str, default="SAC", help="algorithm name")
+        parser = argparse.ArgumentParser("Hyperparameters Setting for DQN")
+        parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
+        parser.add_argument("--algo_name", type=str, default="DQN", help="algorithm name")
         parser.add_argument("--seed", type=int, default=10, help="random seed")
         parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
         # Training Params
-        parser.add_argument("--max_train_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
-        parser.add_argument("--max_episode_steps", type=int, default=int(1e3), help=" Maximum number of training steps")
-        parser.add_argument("--evaluate_freq", type=float, default=5e3,
+        parser.add_argument("--max_train_steps", type=int, default=int(4e5), help=" Maximum number of training steps")
+        parser.add_argument("--evaluate_freq", type=float, default=1e3,
                             help="Evaluate the policy every 'evaluate_freq' steps")
         parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
-        parser.add_argument("--buffer_size", type=int, default=int(1e6), help="Reply buffer size")
+        parser.add_argument("--buffer_size", type=int, default=int(1e5), help="Reply buffer size")
         parser.add_argument("--batch_size", type=int, default=256, help="Minibatch size")
         # Net Params
         parser.add_argument("--hidden_dim", type=int, default=256,
                             help="The number of neurons in hidden layers of the neural network")
-        parser.add_argument("--actor_lr", type=float, default=3e-4, help="Learning rate of actor")
-        parser.add_argument("--critic_lr", type=float, default=3e-4, help="Learning rate of critic")
-        parser.add_argument("--alpha_lr", type=float, default=3e-4, help="Learning rate of alpha")
+        parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate of QNet")
         parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
-        parser.add_argument("--tau", type=float, default=0.005, help="Softly update the target network")
+        parser.add_argument("--epsilon", type=float, default=0.1, help="Random exploration hyper-params")
+        parser.add_argument("--update_frequence", type=int, default=0.99, help="Hardly update frequence")
         parser.add_argument("--k_epochs", type=int, default=10, help="更新策略网络的次数")
-        parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick 2:state normalization")
+        parser.add_argument("--tau", type=float, default=0.005, help="Trick: Softly update the target network")
+        parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick:state normalization")
 
         return parser.parse_args()
 
 
-class SACModel(ModelBase):
+class DQNModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = SAC(args)
+        self.agent = DQN(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+
+    def evaluate_policy(self):
+        times = 3
+        evaluate_reward = 0
+        for _ in range(times):
+            s, _ = self.env_evaluate.reset(seed=self.args.seed)
+            if self.args.use_state_norm:
+                s = self.state_norm(s, update=False)  # During the evaluating,update=False
+            episode_reward = 0
+            while True:
+                # We use the deterministic policy during the evaluating
+                action = self.agent.sample_action(s)
+                s_, r, terminated, truncated, _ = self.env_evaluate.step(action)
+                if self.args.use_state_norm:
+                    s_ = self.state_norm(s_, update=False)
+                episode_reward += r
+                s = s_
+                if terminated or truncated:
+                    break
+            evaluate_reward += episode_reward
+
+        return evaluate_reward / times
 
     def train(self):
         """ 训练 """
@@ -103,22 +124,18 @@ def make_env(args):
     """ 配置智能体和环境 """
     env = gym.make(args.env_name)  # 创建环境
     state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
-    max_action = env.action_space.high[0]
-    print(f"state dim:{state_dim}, action dim:{action_dim}, max action:{max_action}")
-
-    # 更新n_states, max_action和n_actions到cfg参数中
+    action_dim = env.action_space.n
+    print(f"state dim:{state_dim}, action dim:{action_dim}")
     setattr(args, 'state_dim', state_dim)
     setattr(args, 'action_dim', action_dim)
-    setattr(args, 'max_action', max_action)
-
+    setattr(args, 'max_episode_steps', env._max_episode_steps)
     return env
 
 
 if __name__ == '__main__':
     args = Config().__call__()
     env = make_env(args)
-    model = SACModel(
+    model = DQNModel(
         env=env,
         args=args,
     )
