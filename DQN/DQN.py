@@ -51,10 +51,10 @@ class DQN:
 
         self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=args.lr)  # 优化器
 
-    def sample_action(self, s):
+    def sample_action(self, s, deterministic=False):
         with torch.no_grad():
             s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0) 
-            if np.random.uniform() > self.epsilon:
+            if np.random.uniform() > self.epsilon or deterministic:
                 action = self.policy_net(s).argmax(dim=-1).item()
             else:
                 action = np.random.randint(0, self.action_dim)
@@ -63,9 +63,10 @@ class DQN:
     def update(self):
         batch_s, batch_a, batch_s_, batch_r, batch_terminated, batch_d = self.memory.sample(self.batch_size, with_log=False)
         q_currents = self.policy_net(batch_s)
-        q_currents = q_currents.gather(-1, batch_a.unsqueeze(0)).squeeze(-1)  # shape：(batch_size,)
+        q_currents = q_currents.gather(-1, batch_a.unsqueeze(-1))  # shape：(batch_size,)
+
         max_q_target = self.target_net(batch_s_).max(dim=-1)[0]
-        q_targets = batch_r + self.gamma * max_q_target * (1 - batch_terminated)
+        q_targets = batch_r + self.gamma * max_q_target.unsqueeze(-1) * (1 - batch_terminated)
         td_errors = q_currents - q_targets
         loss = (td_errors ** 2).mean()
 

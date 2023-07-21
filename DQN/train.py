@@ -10,33 +10,30 @@ local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')
 
 
-class Config:
-    def __call__(self, *args, **kwargs):
-        # Env Params
-        parser = argparse.ArgumentParser("Hyperparameters Setting for DQN")
-        parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
-        parser.add_argument("--algo_name", type=str, default="DQN", help="algorithm name")
-        parser.add_argument("--seed", type=int, default=10, help="random seed")
-        parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
-        # Training Params
-        parser.add_argument("--max_train_steps", type=int, default=int(4e5), help=" Maximum number of training steps")
-        parser.add_argument("--evaluate_freq", type=float, default=1e3,
-                            help="Evaluate the policy every 'evaluate_freq' steps")
-        parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
-        parser.add_argument("--buffer_size", type=int, default=int(1e5), help="Reply buffer size")
-        parser.add_argument("--batch_size", type=int, default=256, help="Minibatch size")
-        # Net Params
-        parser.add_argument("--hidden_dim", type=int, default=256,
-                            help="The number of neurons in hidden layers of the neural network")
-        parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate of QNet")
-        parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
-        parser.add_argument("--epsilon", type=float, default=0.1, help="Random exploration hyper-params")
-        parser.add_argument("--update_frequence", type=int, default=0.99, help="Hardly update frequence")
-        parser.add_argument("--k_epochs", type=int, default=10, help="更新策略网络的次数")
-        parser.add_argument("--tau", type=float, default=0.005, help="Trick: Softly update the target network")
-        parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick:state normalization")
+def args():
+    parser = argparse.ArgumentParser("Hyperparameters Setting for DQN")
+    parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
+    parser.add_argument("--algo_name", type=str, default="DQN", help="algorithm name")
+    parser.add_argument("--seed", type=int, default=10, help="random seed")
+    parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
+    # Training Params
+    parser.add_argument("--max_train_steps", type=int, default=int(4e5), help=" Maximum number of training steps")
+    parser.add_argument("--evaluate_freq", type=float, default=1e3,
+                        help="Evaluate the policy every 'evaluate_freq' steps")
+    parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
+    parser.add_argument("--buffer_size", type=int, default=int(1e5), help="Reply buffer size")
+    parser.add_argument("--batch_size", type=int, default=256, help="Minibatch size")
+    # Net Params
+    parser.add_argument("--hidden_dim", type=int, default=256,
+                        help="The number of neurons in hidden layers of the neural network")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate of QNet")
+    parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
+    parser.add_argument("--epsilon", type=float, default=0.1, help="Random exploration hyper-params")
+    parser.add_argument("--update_frequence", type=int, default=200, help="Hardly update frequence")
+    parser.add_argument("--tau", type=float, default=0.005, help="Trick: Softly update the target network")
+    parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick: state normalization")
 
-        return parser.parse_args()
+    return parser.parse_args()
 
 
 class DQNModel(ModelBase):
@@ -44,28 +41,6 @@ class DQNModel(ModelBase):
         super().__init__(env, args)
         self.agent = DQN(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
-
-    def evaluate_policy(self):
-        times = 3
-        evaluate_reward = 0
-        for _ in range(times):
-            s, _ = self.env_evaluate.reset(seed=self.args.seed)
-            if self.args.use_state_norm:
-                s = self.state_norm(s, update=False)  # During the evaluating,update=False
-            episode_reward = 0
-            while True:
-                # We use the deterministic policy during the evaluating
-                action = self.agent.sample_action(s)
-                s_, r, terminated, truncated, _ = self.env_evaluate.step(action)
-                if self.args.use_state_norm:
-                    s_ = self.state_norm(s_, update=False)
-                episode_reward += r
-                s = s_
-                if terminated or truncated:
-                    break
-            evaluate_reward += episode_reward
-
-        return evaluate_reward / times
 
     def train(self):
         """ 训练 """
@@ -133,7 +108,7 @@ def make_env(args):
 
 
 if __name__ == '__main__':
-    args = Config().__call__()
+    args = args()
     env = make_env(args)
     model = DQNModel(
         env=env,
