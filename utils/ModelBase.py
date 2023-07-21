@@ -24,9 +24,7 @@ class ModelBase(object):
 
         self.agent = None
         self.model_name = None
-
-        if self.args.use_state_norm:
-            self.state_norm = Normalization(shape=self.args.n_states)  # Trick 2:state normalization
+        self.state_norm = None
 
     def evaluate_policy(self):
         times = 3

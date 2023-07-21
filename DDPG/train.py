@@ -1,11 +1,10 @@
 import os
 import numpy as np
-from DQN import DQN
+from DDPG import DQN
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
-import torch
 
 local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')
@@ -16,8 +15,7 @@ def args():
     parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
     parser.add_argument("--algo_name", type=str, default="DQN", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
-    parser.add_argument("--device", type=str, default=torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"), help="pytorch device")
+    parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
     # Training Params
     parser.add_argument("--max_train_steps", type=int, default=int(4e5), help=" Maximum number of training steps")
     parser.add_argument("--evaluate_freq", type=float, default=1e3,

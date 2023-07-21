@@ -1,25 +1,39 @@
 我的强化学习笔记，持续更新中...  
 ---
-目标是，对每一种RL算法
-* 介绍算法原理
-* 使用pytorch实现，并解释每一段代码
-* 介绍如何调参
+目标是介绍每一种RL算法的
+* 算法原理 ✔️
+* Pytorch实现 ✔️
+* 调参方法❌
 
-**导航**  
-👉 [Q-Learning]() 施工中  
-👉 [DQN](DQN/DQN.md)  
-👉 [Rainbow-DQN]() 施工中  
-👉 [DDPG]() 施工中  
-👉 [TRPO]() 施工中  
-👉 [PPO-Continuous](PPO/PPO.md)  
-👉 [SAC](SAC/SAC.md)
+
+| 算法         | Policy | Based |
+| --------------- | -------- | ------------- |
+| 👉 [Q-Learning](Q-learning/Q_learning.md)        | off-policy     | value-based        |
+| 👉 [DQN](DQN/DQN.md)             | off-policy   | value-based        |
+| 👉 [Rainbow-DQN]() 施工中   | off-policy     | value-based        |
+| 👉 [DDPG]() 施工中     | off-policy     | Actor-Critic        |
+| 👉 [TRPO]() 施工中            | on-policy     | Actor-Critic        |
+| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy     | Actor-Critic        |
+| 👉 [SAC](SAC/SAC.md)          | off-policy     | Actor-Critic        |
+
+运行示例
+---
 
 > 运行环境：  
-python(in Pycharm)~= 3.9.13  
-gymnasium~=0.28.1  
-numpy~=1.24.3  
-torch~=1.12.0  
+python(in Pycharm)- 3.9.13  
+gymnasium-0.28.1  
+numpy-1.24.3  
+torch-1.12.0  
 
+建议使用 Pycharm 运行，vscode或终端启动会有路径问题。建议更新 `gymnasium` 和 `pytorch` 到最新版本。算法原理请参考每个算法文件夹内的 markdown 文件，内部实现参考以算法名称命名的 .py 脚本。想要训练可以运行 `train.py` 脚本。  
+
+在部分算法中，添加了 tensorboard 模块，在对应算法文件夹内启动训练后会生成 log 文件夹，通过下面的终端命令可以打开网页查看训练日志：
+```shell
+tensorboard --logdir .
+```
+
+参考文献
+---
 算法参考：
 * [OpenAI-Spinningup](https://spinningup.openai.com/en/latest/algorithms/sac.html)
 * [Easy-RL (蘑菇书)]()

@@ -57,6 +57,8 @@ class PPOContinuousModel(ModelBase):
         super().__init__(env, args)
         self.agent = PPO_continuous(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+        if self.args.use_state_norm:
+            self.state_norm = Normalization(shape=self.args.n_states)  # Trick 2:state normalization
 
     def train(self):
         """ 训练 """

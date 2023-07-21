@@ -5,6 +5,7 @@ from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
+from utils.normalization import Normalization
 
 local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')
@@ -45,6 +46,8 @@ class SACModel(ModelBase):
         super().__init__(env, args)
         self.agent = SAC(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+        if self.args.use_state_norm:
+            self.state_norm = Normalization(shape=self.args.n_states)  # Trick 2:state normalization
 
     def train(self):
         """ 训练 """
