@@ -35,7 +35,7 @@ class ReplayBuffer:
             s, a, s_, r, dw, done = zip(*batch)
 
         s = torch.tensor(np.asarray(s), dtype=torch.float)
-        a = torch.tensor(np.asarray(a))
+        a = torch.tensor(np.asarray(a), dtype=torch.float)
         if with_log:
             a_logprob = torch.tensor(np.asarray(a_logprob), dtype=torch.float)
         s_ = torch.tensor(np.asarray(s_), dtype=torch.float)

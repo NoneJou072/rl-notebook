@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.replay_buffer import ReplayBuffer
+from utils.replay_buffer import ReplayBufferDiscreteAction
 
 
 class QNet(nn.Module):
@@ -41,7 +41,7 @@ class DQN:
         self.update_frequence = args.update_frequence
 
         self.batch_size = args.batch_size
-        self.memory = ReplayBuffer(capacity=args.buffer_size)
+        self.memory = ReplayBufferDiscreteAction(capacity=args.buffer_size)
 
         self.state_dim = args.state_dim
         self.action_dim = args.action_dim

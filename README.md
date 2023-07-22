@@ -6,15 +6,16 @@
 * 调参方法❌
 
 
-| 算法         | Policy | Based |
-| --------------- | -------- | ------------- |
-| 👉 [Q-Learning](Q-learning/Q_learning.md)        | off-policy     | value-based        |
-| 👉 [DQN](DQN/DQN.md)             | off-policy   | value-based        |
-| 👉 [Rainbow-DQN]() 施工中   | off-policy     | value-based        |
-| 👉 [DDPG]() 施工中     | off-policy     | Actor-Critic        |
-| 👉 [TRPO]() 施工中            | on-policy     | Actor-Critic        |
-| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy     | Actor-Critic        |
-| 👉 [SAC](SAC/SAC.md)          | off-policy     | Actor-Critic        |
+| 算法                                          | Policy | Based |
+|---------------------------------------------| -------- | ------------- |
+| 👉 [Q-Learning](Q-learning/Q_learning.md)   | off-policy     | value-based        |
+| 👉 [DQN](DQN/DQN.md)                        | off-policy   | value-based        |
+| 👉 [Rainbow-DQN]() 施工中                     | off-policy     | value-based        |
+| 👉 [DDPG](DDPG/DDPG.md)                     | off-policy     | Actor-Critic        |
+| 👉 [TD3]() 施工中                              | off-policy     | Actor-Critic        |
+| 👉 [TRPO]() 施工中                             | on-policy     | Actor-Critic        |
+| 👉 [PPO-Continuous](PPO/PPO.md)             | on-policy     | Actor-Critic        |
+| 👉 [SAC](SAC/SAC.md)                        | off-policy     | Actor-Critic        |
 
 运行示例
 ---
@@ -25,7 +26,7 @@ gymnasium-0.28.1
 numpy-1.24.3  
 torch-1.12.0  
 
-建议使用 Pycharm 运行，vscode或终端启动会有路径问题。建议更新 `gymnasium` 和 `pytorch` 到最新版本。算法原理请参考每个算法文件夹内的 markdown 文件，内部实现参考以算法名称命名的 .py 脚本。想要训练可以运行 `train.py` 脚本。  
+建议使用 Pycharm 运行，vscode或终端启动会有路径问题。建议更新 `gymnasium` 和 `pytorch` 到最新版本。算法原理请参考每个算法文件夹内的 markdown 文件，内部实现参考以算法名称命名的 `.py` 脚本。想要训练可以运行 `train.py` 脚本。
 
 在部分算法中，添加了 tensorboard 模块，在对应算法文件夹内启动训练后会生成 log 文件夹，通过下面的终端命令可以打开网页查看训练日志：
 ```shell

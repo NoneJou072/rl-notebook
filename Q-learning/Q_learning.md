@@ -13,7 +13,7 @@ Q-Learning 的伪代码如下所示：
 * for 序列 $e=1 \to E$ do：
     * 得到初始状态 $s$
     * for 时间步 $t=1\to T$ do :
-        * 用$\epsilon$-greedy 策略根据 Q 选择当前状态 s 下的动作 a
+        * 用$\epsilon$ -greedy 策略根据 Q 选择当前状态 s 下的动作 a
         * 得到环境反馈的 r, s'
         * $Q(s,a)\gets Q(s,a)+\alpha[r+\gamma \underset{a'}{max}Q(s',a')-Q(s,a)]$
         * $s\gets s'$
