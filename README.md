@@ -12,7 +12,7 @@
 | 👉 [DQN](DQN/DQN.md)                        | off-policy   | value-based        |
 | 👉 [Rainbow-DQN]() 施工中                     | off-policy     | value-based        |
 | 👉 [DDPG](DDPG/DDPG.md)                     | off-policy     | Actor-Critic        |
-| 👉 [TD3]() 施工中                              | off-policy     | Actor-Critic        |
+| 👉 [TD3](TD3/TD3.md)                              | off-policy     | Actor-Critic        |
 | 👉 [TRPO]() 施工中                             | on-policy     | Actor-Critic        |
 | 👉 [PPO-Continuous](PPO/PPO.md)             | on-policy     | Actor-Critic        |
 | 👉 [SAC](SAC/SAC.md)                        | off-policy     | Actor-Critic        |
@@ -38,6 +38,7 @@ tensorboard --logdir .
 算法参考：
 * [OpenAI-Spinningup](https://spinningup.openai.com/en/latest/algorithms/sac.html)
 * [Easy-RL (蘑菇书)]()
+* 深度强化学习-王树森等
 
 代码参考：
 * [Github:Lizhi-sjtu/DRL-code-pytorch](https://github.com/Lizhi-sjtu/DRL-code-pytorch/blob/main/2.Actor-Critic/README.md)  
