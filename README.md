@@ -6,16 +6,17 @@
 * 调参方法❌
 
 
-| 算法                                          | Policy | Based |
-|---------------------------------------------| -------- | ------------- |
-| 👉 [Q-Learning](Q-learning/Q_learning.md)   | off-policy     | value-based        |
-| 👉 [DQN](DQN/DQN.md)                        | off-policy   | value-based        |
-| 👉 [Rainbow-DQN]() 施工中                     | off-policy     | value-based        |
-| 👉 [DDPG](DDPG/DDPG.md)                     | off-policy     | Actor-Critic        |
-| 👉 [TD3](TD3/TD3.md)                              | off-policy     | Actor-Critic        |
-| 👉 [TRPO]() 施工中                             | on-policy     | Actor-Critic        |
-| 👉 [PPO-Continuous](PPO/PPO.md)             | on-policy     | Actor-Critic        |
-| 👉 [SAC](SAC/SAC.md)                        | off-policy     | Actor-Critic        |
+| 算法                                        | Policy     | Based |
+|-------------------------------------------|------------| ------------- |
+| 👉 [Sarsa](Sarsa/Sarsa.md)           | on-policy  | value-based        |
+| 👉 [Q-Learning](Q-learning/Q_learning.md) | off-policy | value-based        |
+| 👉 [DQN](DQN/DQN.md)                      | off-policy | value-based        |
+| 👉 [Rainbow-DQN]() 施工中                    | off-policy | value-based        |
+| 👉 [DDPG](DDPG/DDPG.md)                   | off-policy | Actor-Critic        |
+| 👉 [TD3](TD3/TD3.md)                      | off-policy | Actor-Critic        |
+| 👉 [TRPO]() 施工中                           | on-policy  | Actor-Critic        |
+| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy  | Actor-Critic        |
+| 👉 [SAC](SAC/SAC.md)                      | off-policy | Actor-Critic        |
 
 运行示例
 ---
