@@ -12,7 +12,7 @@ log_path = os.path.join(local_path, 'log')
 
 def args():
     parser = argparse.ArgumentParser("Hyperparameters Setting for actor-critic")
-    parser.add_argument("--env_name", type=str, default="CartPole-v0", help="env name")
+    parser.add_argument("--env_name", type=str, default="CartPole-v1", help="env name")
     parser.add_argument("--algo_name", type=str, default="actor-critic", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
@@ -50,15 +50,9 @@ class ACModel(ModelBase):
 
         while total_steps < self.args.max_train_steps:
             s, _ = self.env.reset(seed=self.args.seed)  # 重置环境，返回初始状态
-            ep_step = 0
             while True:
-                ep_step += 1
                 a = self.agent.sample_action(s)  # 选择动作
                 s_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
-
-                if ep_step == self.args.max_episode_steps:
-                    truncated = True
-
                 self.agent.update(s, a, r, s_, terminated)
                 s = s_  # 更新下一个状态
                 total_steps += 1

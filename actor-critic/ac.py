@@ -8,8 +8,8 @@ import copy
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)  # 输入层
-        self.fc2 = nn.Linear(hidden_dim, action_dim)  # 隐藏层
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, s):
         s = F.relu(self.fc1(s))
@@ -20,8 +20,8 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, hidden_dim) -> None:
         super().__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)  # 输入层
-        self.fc2 = nn.Linear(hidden_dim, 1)  # 输出层
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 1)
 
     def forward(self, s):
         v = F.relu(self.fc1(s))
@@ -34,7 +34,6 @@ class AC:
         self.lr = args.lr
         self.gamma = args.gamma
         self.tau = args.tau
-        self.I = 1
 
         self.state_dim = args.state_dim
         self.action_dim = args.action_dim
@@ -42,7 +41,7 @@ class AC:
 
         self.actor = Actor(self.state_dim, self.action_dim, self.hidden_dim)
         self.critic = Critic(self.state_dim, self.hidden_dim)
-        # self.target_critic = copy.deepcopy(self.critic)
+        self.target_critic = copy.deepcopy(self.critic)
     
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
@@ -50,13 +49,15 @@ class AC:
     @torch.no_grad()
     def sample_action(self, s, deterministic=False):
         s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0)
-        a_prob = self.actor(s).detach().numpy().flatten()
+        a_prob = self.actor(s)
         if deterministic:
             # Select the action with the highest probability
-            a = np.argmax(a_prob)
+            a = np.argmax(a_prob.numpy().flatten())
         else:
             # Sample the action according to the probability distribution
-            a = np.random.choice(range(self.action_dim), p=a_prob)
+            # a = np.random.choice(range(self.action_dim), p=a_prob)
+            action_dist = torch.distributions.Categorical(a_prob)
+            a = action_dist.sample().item()
         return a
 
     def update(self, s, a, r, s_, d):
@@ -65,13 +66,13 @@ class AC:
         s_ = torch.unsqueeze(torch.tensor(s_, dtype=torch.float32), 0)
 
         v = self.critic(s).flatten()
-        v_ = self.critic(s_).flatten()
 
         with torch.no_grad():
+            v_ = self.target_critic(s_).flatten()
             td_target = r + self.gamma * v_ * (1 - d)
 
         log_pi = torch.log(self.actor(s).flatten()[a])  # log pi(a|s)
-        actor_loss = -self.I * ((td_target - v).detach()) * log_pi
+        actor_loss = -((td_target - v).detach()) * log_pi
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -81,8 +82,6 @@ class AC:
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        # # soft update target net
-        # for params, target_params in zip(self.critic.parameters(), self.target_critic.parameters()):
-        #     target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)
-
-        self.I *= self.gamma
+        # soft update target net
+        for params, target_params in zip(self.critic.parameters(), self.target_critic.parameters()):
+            target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)
