@@ -6,17 +6,18 @@
 * 调参方法❌
 
 
-| 算法                                        | Policy     | Based |
-|-------------------------------------------|------------| ------------- |
-| 👉 [Sarsa](Sarsa/Sarsa.md)           | on-policy  | value-based        |
-| 👉 [Q-Learning](Q-learning/Q_learning.md) | off-policy | value-based        |
-| 👉 [DQN](DQN/DQN.md)                      | off-policy | value-based        |
-| 👉 [Rainbow-DQN]() 施工中                    | off-policy | value-based        |
-| 👉 [DDPG](DDPG/DDPG.md)                   | off-policy | Actor-Critic        |
-| 👉 [TD3](TD3/TD3.md)                      | off-policy | Actor-Critic        |
-| 👉 [TRPO]() 施工中                           | on-policy  | Actor-Critic        |
-| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy  | Actor-Critic        |
-| 👉 [SAC](SAC/SAC.md)                      | off-policy | Actor-Critic        |
+| 算法                                        | Policy     | Based        |
+|-------------------------------------------|------------|--------------|
+| 👉 [Sarsa](Sarsa/Sarsa.md)                | on-policy  | value-based  |
+| 👉 [Q-Learning](Q-learning/Q_learning.md) | off-policy | value-based  |
+| 👉 [DQN](DQN/DQN.md)                      | off-policy | value-based  |
+| 👉 [Rainbow-DQN]() 施工中                    | off-policy | value-based  |
+| 👉 [REINFORCE](REINFORCE/REINFORCE.md)    | on-policy  | policy-based |
+| 👉 [DDPG](DDPG/DDPG.md)                   | off-policy | Actor-Critic |
+| 👉 [TD3](TD3/TD3.md)                      | off-policy | Actor-Critic |
+| 👉 [TRPO]() 施工中                           | on-policy  | Actor-Critic |
+| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy  | Actor-Critic |
+| 👉 [SAC](SAC/SAC.md)                      | off-policy | Actor-Critic |
 
 运行示例
 ---
@@ -36,14 +37,10 @@ tensorboard --logdir .
 
 参考文献
 ---
-算法参考：
 * [OpenAI-Spinningup](https://spinningup.openai.com/en/latest/algorithms/sac.html)
 * [Easy-RL (蘑菇书)]()
 * 深度强化学习-王树森等
-
-代码参考：
 * [Github:Lizhi-sjtu/DRL-code-pytorch](https://github.com/Lizhi-sjtu/DRL-code-pytorch/blob/main/2.Actor-Critic/README.md)  
 * [动手学强化学习](https://hrl.boyuai.com/chapter/2/dqn%E7%AE%97%E6%B3%95)
 
-调参方法：
 * [博客园: 强化学习调参技巧二：DDPG、TD3、SAC算法为例](https://www.cnblogs.com/ting1/p/16984892.html)
