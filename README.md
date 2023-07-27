@@ -7,19 +7,20 @@
 
 单智能体强化学习算法：  
 
-| 算法                                        | Policy     | Based        |
-|-------------------------------------------|------------|--------------|
-| 👉 [Sarsa](Sarsa/Sarsa.md)                | on-policy  | value-based  |
-| 👉 [Q-Learning](Q-learning/Q_learning.md) | off-policy | value-based  |
-| 👉 [DQN](DQN/DQN.md)                      | off-policy | value-based  |
-| 👉 [Rainbow-DQN]() ❌                    | off-policy | value-based  |
-| 👉 [REINFORCE](REINFORCE/REINFORCE.md)    | on-policy  | policy-based |
+| 算法                                              | Policy     | Based        |
+|-------------------------------------------------|------------|--------------|
+| 👉 [Sarsa](Sarsa/Sarsa.md)                      | on-policy  | value-based  |
+| 👉 [Q-Learning](Q-learning/Q_learning.md)       | off-policy | value-based  |
+| 👉 [DQN](DQN/DQN.md)                            | off-policy | value-based  |
+| ❌  [Rainbow-DQN]()                              | off-policy | value-based  |
+| 👉 [REINFORCE](REINFORCE/REINFORCE.md)          | on-policy  | policy-based |
 | 👉 [actor-critic](actor-critic/actor-critic.md) | on-policy  | policy-based |
-| 👉 [DDPG](DDPG/DDPG.md)                   | off-policy | Actor-Critic |
-| 👉 [TD3](TD3/TD3.md)                      | off-policy | Actor-Critic |
-| 👉 [TRPO]() ❌                           | on-policy  | Actor-Critic |
-| 👉 [PPO-Continuous](PPO/PPO.md)           | on-policy  | Actor-Critic |
-| 👉 [SAC](SAC/SAC.md)                      | off-policy | Actor-Critic |
+| 👉 [A2C](A2C/A2C.md)                            | on-policy  | Actor-Critic |
+| 👉 [DDPG](DDPG/DDPG.md)                         | off-policy | Actor-Critic |
+| 👉 [TD3](TD3/TD3.md)                            | off-policy | Actor-Critic |
+| ❌  [TRPO]()                                     | on-policy  | Actor-Critic |
+| 👉 [PPO-Continuous](PPO/PPO.md)                 | on-policy  | Actor-Critic |
+| 👉 [SAC](SAC/SAC.md)                            | off-policy | Actor-Critic |
 
 多智能体强化学习算法：  
 Coming soon
