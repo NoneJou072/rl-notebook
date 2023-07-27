@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from REINFORCE import REINFORCE
+from REINFORCE_baseline import REINFORCE as REINFORCE_B
 from utils.ModelBase import ModelBase
 import argparse
 import gymnasium as gym
@@ -20,9 +21,9 @@ def args():
     parser.add_argument("--max_train_steps", type=int, default=int(4e5), help=" Maximum number of training steps")
     parser.add_argument("--evaluate_freq", type=float, default=1e3,
                         help="Evaluate the policy every 'evaluate_freq' steps")
-    parser.add_argument("--lr", type=float, default=1e-2, help="Learning rate of QNet")
+    parser.add_argument("--lr", type=float, default=4e-4, help="Learning rate of QNet")
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
-    parser.add_argument("--hidden_dim", type=float, default=128, help="The number of neurons in hidden layers of the neural network")
+    parser.add_argument("--hidden_dim", type=float, default=64, help="The number of neurons in hidden layers of the neural network")
     parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick: state normalization")
     parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
 
@@ -32,7 +33,9 @@ def args():
 class REINFORCEModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = REINFORCE(args)
+        # Select REINFORCE or REINFORCE with baseline
+        # self.agent = REINFORCE(args)
+        self.agent = REINFORCE_B(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
 
     def train(self):

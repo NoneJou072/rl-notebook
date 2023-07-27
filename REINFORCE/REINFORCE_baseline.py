@@ -7,14 +7,25 @@ import torch.nn.functional as F
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)  # 输入层
-        self.fc2 = nn.Linear(hidden_dim, action_dim)  # 输出层
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, s):
         s = F.relu(self.fc1(s))
         a_prob = F.softmax(self.fc2(s), dim=1)
         return a_prob
-    
+
+
+class ValueNet(nn.Module):
+    def __init__(self, state_dim, hidden_dim) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, 1)
+
+    def forward(self, s):
+        s = F.relu(self.fc1(s))
+        return self.fc2(s)
+
 
 class REINFORCE:
     def __init__(self, args):
@@ -31,6 +42,9 @@ class REINFORCE:
 
         self.actor = Actor(self.state_dim, self.action_dim, self.hidden_dim)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
+
+        self.value_net = ValueNet(self.state_dim, self.hidden_dim)
+        self.value_net_optim = torch.optim.Adam(self.value_net.parameters(), lr=self.lr)
 
     @torch.no_grad()
     def sample_action(self, s, deterministic=False):
@@ -64,12 +78,19 @@ class REINFORCE:
                 s = torch.unsqueeze(torch.tensor(self.states[t], dtype=torch.float32), 0)
                 a = self.actions[t]
                 g = G[t]
+                v_s = self.value_net(s).flatten()
 
                 a_prob = self.actor(s).flatten()
-                loss = -self.gamma ** t * g * torch.log(a_prob[a])
+                loss = -self.gamma ** t * ((g - v_s).detach()) * torch.log(a_prob[a])
                 self.actor_optimizer.zero_grad()
                 loss.backward()
                 self.actor_optimizer.step()
+
+                g = torch.tensor([g], requires_grad=False)
+                value_loss = F.mse_loss(v_s, g)
+                self.value_net_optim.zero_grad()
+                value_loss.backward()
+                self.value_net_optim.step()
 
             # Clean the buffers
             self.states = []
