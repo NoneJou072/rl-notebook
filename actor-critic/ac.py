@@ -41,7 +41,6 @@ class AC:
 
         self.actor = Actor(self.state_dim, self.action_dim, self.hidden_dim)
         self.critic = Critic(self.state_dim, self.hidden_dim)
-        self.target_critic = copy.deepcopy(self.critic)
     
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
@@ -68,11 +67,11 @@ class AC:
         v = self.critic(s).flatten()
 
         with torch.no_grad():
-            v_ = self.target_critic(s_).flatten()
+            v_ = self.critic(s_).flatten()
             td_target = r + self.gamma * v_ * (1 - d)
 
         log_pi = torch.log(self.actor(s).flatten()[a])  # log pi(a|s)
-        actor_loss = -((td_target - v).detach()) * log_pi
+        actor_loss = -(td_target.detach()) * log_pi
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -82,6 +81,3 @@ class AC:
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        # soft update target net
-        for params, target_params in zip(self.critic.parameters(), self.target_critic.parameters()):
-            target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)

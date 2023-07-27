@@ -1,6 +1,7 @@
 import numpy as np
 from collections import defaultdict
 
+
 class QLearning:
     def __init__(self, args):
         self.epsilon = None
@@ -14,7 +15,7 @@ class QLearning:
         self.sample_count = 0
         # 用嵌套字典存放状态->动作->状态-动作值（Q值）的映射
         self.Q_table = defaultdict(lambda: np.zeros(self.action_dim))
-        
+
     def sample_action(self, state, deterministic=False):
         self.sample_count += 1
         self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
