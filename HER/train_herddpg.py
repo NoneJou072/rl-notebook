@@ -1,10 +1,11 @@
 import os
 import numpy as np
-from DDPG import DDPG
+from HER.HERDDPG import HERDDPG
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
+from utils.replay_buffer import Trajectory
 
 local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')
@@ -12,8 +13,8 @@ log_path = os.path.join(local_path, 'log')
 
 def args():
     parser = argparse.ArgumentParser("Hyperparameters Setting for DDPG")
-    parser.add_argument("--env_name", type=str, default="Pendulum-v1", help="env name")
-    parser.add_argument("--algo_name", type=str, default="DDPG", help="algorithm name")
+    parser.add_argument("--env_name", type=str, default="FetchPickAndPlace-v2", help="env name")
+    parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
     # Training Params
@@ -30,16 +31,18 @@ def args():
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--tau", type=float, default=0.005, help="Softly update the target network")
     parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick: state normalization")
-    parser.add_argument("--random_steps", type=int, default=25e3, help="Take the random actions in the beginning for the better exploration")
-    parser.add_argument("--update_freq", type=int, default=1, help="Take 50 steps,then update the networks 50 times")
+    parser.add_argument("--random_steps", type=int, default=1e3,
+                        help="Take the random actions in the beginning for the better exploration")
+    parser.add_argument("--update_freq", type=int, default=50, help="Take 50 steps,then update the networks 50 times")
+    parser.add_argument("--k_future", type=int, default=2, help="Her k future")
 
     return parser.parse_args()
 
 
-class DDPGModel(ModelBase):
+class HERDDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = DDPG(args)
+        self.agent = HERDDPG(env, args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
@@ -50,7 +53,6 @@ class DDPGModel(ModelBase):
 
         total_steps = 0
         evaluate_num = 0
-        sample_count = 0
         evaluate_rewards = []  # 记录每回合的奖励
 
         # Tensorboard config
@@ -58,23 +60,28 @@ class DDPGModel(ModelBase):
         writer = SummaryWriter(log_dir=log_dir)
 
         while total_steps < self.args.max_train_steps:
-            s, _ = self.env.reset(seed=self.args.seed)  # 重置环境，返回初始状态
+            env_dict, _ = self.env.reset(seed=self.args.seed)  # 重置环境，返回初始状态
+            s = env_dict["observation"]
+            achieved_g = env_dict["achieved_goal"]
+            desired_g = env_dict["desired_goal"]
+            traj = Trajectory()
             ep_step = 0
             while True:
                 ep_step += 1
-                sample_count += 1
-                a = self.agent.sample_action(s)  # 选择动作
-                s_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
-
-                if ep_step == self.args.max_episode_steps:
-                    truncated = True
+                a = self.agent.sample_action(s, desired_g)  # 选择动作
+                env_dict_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
+                s_ = env_dict_["observation"]
+                achieved_g_ = env_dict_["achieved_goal"]
+                desired_g_ = env_dict_["desired_goal"]
 
                 # 保存transition
-                self.agent.memory.push((s, a, s_, r, terminated, truncated))
-                s = s_  # 更新下一个状态
-                total_steps += 1
+                traj.push((s, a, s_, r, terminated, truncated, achieved_g, desired_g))
+                s = s_.copy()
+                achieved_g = achieved_g_.copy()
+                desired_g = desired_g_.copy()
 
                 # Take 50 steps,then update the networks 50 times
+                total_steps += 1
                 if total_steps >= self.random_steps and total_steps % self.update_freq == 0:
                     for _ in range(self.update_freq):
                         self.agent.update()
@@ -95,20 +102,48 @@ class DDPGModel(ModelBase):
                 if terminated or truncated:
                     break
 
+            self.agent.memory.push(traj)
+
         print("完成训练！")
         self.env.close()
+
+    def evaluate_policy(self):
+        times = 3
+        evaluate_reward = 0
+        for _ in range(times):
+            dict, _ = self.env_evaluate.reset(seed=self.args.seed)
+            s = dict["observation"]
+            g = dict["desired_goal"]
+            if self.args.use_state_norm:
+                s = self.state_norm(s, update=False)  # During the evaluating,update=False
+            episode_reward = 0
+            while True:
+                # We use the deterministic policy during the evaluating
+                action = self.agent.sample_action(s, g, deterministic=True)
+                dict_, r, terminated, truncated, _ = self.env_evaluate.step(action)
+                s = dict_["observation"]
+                g = dict_["desired_goal"]
+
+                episode_reward += r
+                if terminated or truncated:
+                    break
+            evaluate_reward += episode_reward
+
+        return evaluate_reward / times
 
 
 def make_env(args):
     """ 配置环境 """
-    env = gym.make(args.env_name)  # 创建环境
-    state_dim = env.observation_space.shape[0]
+    env = gym.make(args.env_name, render_mode=None)  # 创建环境
+    state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
+    goal_dim = env.observation_space.spaces["desired_goal"].shape[0]
     max_action = float(env.action_space.high[0])
 
-    print(f"state dim:{state_dim}, action dim:{action_dim}")
+    print(f"state dim:{state_dim}, action dim:{action_dim}, max_epi_steps:{env._max_episode_steps}")
     setattr(args, 'state_dim', state_dim)
     setattr(args, 'action_dim', action_dim)
+    setattr(args, 'goal_dim', goal_dim)
     setattr(args, 'max_episode_steps', env._max_episode_steps)
     setattr(args, 'max_action', max_action)
     setattr(args, 'sigma', 0.1 * max_action)  # The std of Gaussian noise for exploration
@@ -119,7 +154,7 @@ def make_env(args):
 if __name__ == '__main__':
     args = args()
     env = make_env(args)
-    model = DDPGModel(
+    model = HERDDPGModel(
         env=env,
         args=args,
     )
