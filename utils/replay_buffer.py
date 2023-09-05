@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import random
 from collections import deque
-
+from copy import deepcopy as dc
 
 class ReplayBuffer:
     """ 经验回放池, 用于存储transition, 然后随机采样transition用于训练 """
@@ -69,13 +69,12 @@ class ReplayBuffer:
 class ReplayBufferDiscreteAction(ReplayBuffer):
     """ 经验回放池, 用于存储transition, 然后随机采样transition用于训练 """
 
-    def __init__(self, capacity: int, k_future: int) -> None:
+    def __init__(self, capacity: int) -> None:
         """ 初始化经验回放池
 
             :param capacity: (int) 经验回放池的容量
         """
         super().__init__(capacity)
-        self.k_future = k_future
 
     def sample(self, batch_size: int = None, sequential: bool = True, with_log=True):
         # 如果批量大小大于经验回放的容量，则取经验回放的容量
@@ -131,8 +130,7 @@ class HERReplayBuffer(ReplayBuffer):
     def __init__(self, capacity: int, k_future: int, env) -> None:
         super().__init__(capacity)
         self.env = env  # 需要调用 compute_reward 函数
-        self.k_future = k_future
-        self.her_ratio = 0.8
+        self.future_p = 1 - (1. / (1 + k_future))
 
     def push(self, trajectory: Trajectory):
         """ 存储 trajectory 到经验回放中
@@ -141,35 +139,45 @@ class HERReplayBuffer(ReplayBuffer):
         """
         self.buffer.append(trajectory)
 
-    def sample(self, batch_size: int = None, sequential: bool = True, with_log=True):
-        batch = []
-        # 如果批量大小大于经验回放的容量，则取经验回放的容量
-        if batch_size is None or batch_size > len(self.buffer):
-            batch_size = len(self.buffer)
+    def sample(self, batch_size: int = 256, sequential: bool = True, with_log=True):
+        ep_indices = np.random.randint(0, len(self.buffer), batch_size)
+        time_indices = np.random.randint(0, len(self.buffer[0]), batch_size)
+        states = []
+        actions = []
+        desired_goals = []
+        next_states = []
+        next_achieved_goals = []
 
-        for _ in range(batch_size):
-            # 从经验回放中随机采样一个轨迹
-            traj = random.sample(self.buffer, 1)[0]
-            # 随机从轨迹中采样一个状态作为当前状态
-            step_state = np.random.randint(0, len(traj) - 1)
-            s, a, s_, r, dw, done, achieved_g, desired_g = traj.buffer[step_state]
+        for episode, timestep in zip(ep_indices, time_indices):
+            states.append(dc(self.buffer[episode].buffer[timestep][0]))
+            actions.append(dc(self.buffer[episode].buffer[timestep][1]))
+            next_states.append(dc(self.buffer[episode].buffer[timestep][2]))
+            desired_goals.append(dc(self.buffer[episode].buffer[timestep][5]))
+            next_achieved_goals.append(dc(self.buffer[episode].buffer[timestep][6]))
 
-            if np.random.uniform() < self.her_ratio:
-                # 从回合当前状态的步数开始向后随机采样 k 个步数
-                step_goal = np.random.randint(step_state + 1, len(traj))
-                s, a, s_, r, dw, done, achieved_g, desired_g = traj.buffer[step_goal]
-                r = self.env.compute_reward(achieved_g, desired_g, None)
+        states = np.vstack(states)
+        actions = np.vstack(actions)
+        desired_goals = np.vstack(desired_goals)
+        next_achieved_goals = np.vstack(next_achieved_goals)
+        next_states = np.vstack(next_states)
 
-            batch.append((s, a, s_, r, dw, done, achieved_g, desired_g))
+        her_indices = np.where(np.random.uniform(size=batch_size) < self.future_p)
+        future_offset = np.random.uniform(size=batch_size) * (len(self.buffer[0]) - time_indices)
+        future_offset = future_offset.astype(int)
+        future_t = (time_indices + future_offset)[her_indices]
 
-        s, a, s_, r, dw, done, _, g = zip(*batch)
+        future_ag = []
+        for epi, f_offset in zip(ep_indices[her_indices], future_t):
+            future_ag.append(dc(self.buffer[epi].buffer[f_offset][4]))
+        future_ag = np.vstack(future_ag)
 
-        s = torch.tensor(np.asarray(s), dtype=torch.float)
-        a = torch.tensor(np.asarray(a), dtype=torch.float)
-        s_ = torch.tensor(np.asarray(s_), dtype=torch.float)
-        r = torch.tensor(np.asarray(r), dtype=torch.float).view(-1, 1)
-        dw = torch.tensor(np.asarray(dw), dtype=torch.float).view(-1, 1)
-        done = torch.tensor(np.asarray(done), dtype=torch.float).view(-1, 1)
-        g = torch.tensor(np.asarray(g), dtype=torch.float)
+        desired_goals[her_indices] = future_ag
+        rewards = np.expand_dims(self.env.compute_reward(next_achieved_goals, desired_goals, None), 1)
 
-        return s, a, s_, r, dw, done, g
+        s = torch.tensor(np.asarray(states), dtype=torch.float)
+        a = torch.tensor(np.asarray(actions), dtype=torch.float)
+        s_ = torch.tensor(np.asarray(next_states), dtype=torch.float)
+        r = torch.tensor(np.asarray(rewards), dtype=torch.float)
+        g = torch.tensor(np.asarray(desired_goals), dtype=torch.float)
+
+        return s, a, s_, r, g

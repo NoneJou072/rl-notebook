@@ -76,12 +76,11 @@ class HERDDPG:
             return a
 
     def update(self):
-        batch_s, batch_a, batch_s_, batch_r, batch_terminated, batch_d, batch_g = self.memory.sample(self.batch_size,
-                                                                                                        with_log=False)
+        batch_s, batch_a, batch_s_, batch_r, batch_g = self.memory.sample(self.batch_size)
         q_currents = self.critic(batch_s, batch_g, batch_a)
         with torch.no_grad():  # target_Q has no gradient
             q_next = self.critic_target(batch_s_, batch_g, self.actor_target(batch_s_, batch_g))
-            q_targets = batch_r + self.gamma * q_next * (1 - batch_terminated)
+            q_targets = batch_r + self.gamma * q_next
 
         critic_loss = F.mse_loss(q_currents, q_targets)
         self.critic_optimizer.zero_grad()  # PyTorch中默认梯度会累积,这里需要显式将梯度置为0
