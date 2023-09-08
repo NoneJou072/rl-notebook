@@ -4,6 +4,7 @@ import random
 from collections import deque
 from copy import deepcopy as dc
 
+
 class ReplayBuffer:
     """ 经验回放池, 用于存储transition, 然后随机采样transition用于训练 """
 
@@ -139,7 +140,8 @@ class HERReplayBuffer(ReplayBuffer):
         """
         self.buffer.append(trajectory)
 
-    def sample(self, batch_size: int = 256, sequential: bool = True, with_log=True):
+    def sample(self, batch_size: int = 256, sequential: bool = True, with_log=True, device='cpu'):
+        # 随机取 batch size 个回合索引和时间步索引
         ep_indices = np.random.randint(0, len(self.buffer), batch_size)
         time_indices = np.random.randint(0, len(self.buffer[0]), batch_size)
         states = []
@@ -148,6 +150,7 @@ class HERReplayBuffer(ReplayBuffer):
         next_states = []
         next_achieved_goals = []
 
+        # 取出对应回合与时间步的 transitions
         for episode, timestep in zip(ep_indices, time_indices):
             states.append(dc(self.buffer[episode].buffer[timestep][0]))
             actions.append(dc(self.buffer[episode].buffer[timestep][1]))
@@ -155,12 +158,14 @@ class HERReplayBuffer(ReplayBuffer):
             desired_goals.append(dc(self.buffer[episode].buffer[timestep][5]))
             next_achieved_goals.append(dc(self.buffer[episode].buffer[timestep][6]))
 
+        # 将列表升维并转换成数组类型
         states = np.vstack(states)
         actions = np.vstack(actions)
         desired_goals = np.vstack(desired_goals)
         next_achieved_goals = np.vstack(next_achieved_goals)
         next_states = np.vstack(next_states)
 
+        # 根据 future k 概率随机选择要在批量中替换的索引
         her_indices = np.where(np.random.uniform(size=batch_size) < self.future_p)
         future_offset = np.random.uniform(size=batch_size) * (len(self.buffer[0]) - time_indices)
         future_offset = future_offset.astype(int)
@@ -172,12 +177,12 @@ class HERReplayBuffer(ReplayBuffer):
         future_ag = np.vstack(future_ag)
 
         desired_goals[her_indices] = future_ag
-        rewards = np.expand_dims(self.env.compute_reward(next_achieved_goals, desired_goals, None), 1)
+        rewards = np.expand_dims(self.env.unwrapped.compute_reward(next_achieved_goals, desired_goals, None), 1)
 
-        s = torch.tensor(np.asarray(states), dtype=torch.float)
-        a = torch.tensor(np.asarray(actions), dtype=torch.float)
-        s_ = torch.tensor(np.asarray(next_states), dtype=torch.float)
-        r = torch.tensor(np.asarray(rewards), dtype=torch.float)
-        g = torch.tensor(np.asarray(desired_goals), dtype=torch.float)
+        s = torch.tensor(np.asarray(states), dtype=torch.float).to(device)
+        a = torch.tensor(np.asarray(actions), dtype=torch.float).to(device)
+        s_ = torch.tensor(np.asarray(next_states), dtype=torch.float).to(device)
+        r = torch.tensor(np.asarray(rewards), dtype=torch.float).to(device)
+        g = torch.tensor(np.asarray(desired_goals), dtype=torch.float).to(device)
 
         return s, a, s_, r, g

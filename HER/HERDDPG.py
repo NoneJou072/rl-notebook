@@ -64,9 +64,9 @@ class HERDDPG:
 
     def sample_action(self, s, g, deterministic=False):
         with torch.no_grad():
-            s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0)
-            g = torch.unsqueeze(torch.tensor(g, dtype=torch.float32), 0)
-            a = self.actor(s, g).data.numpy().flatten()
+            s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0).to(self.device)
+            g = torch.unsqueeze(torch.tensor(g, dtype=torch.float32), 0).to(self.device)
+            a = self.actor(s, g).data.cpu().numpy().flatten()
             if not deterministic:
                 a += self.sigma * np.random.randn(self.action_dim)
                 a = np.clip(a, -self.max_action, self.max_action)
@@ -76,11 +76,12 @@ class HERDDPG:
             return a
 
     def update(self):
-        batch_s, batch_a, batch_s_, batch_r, batch_g = self.memory.sample(self.batch_size)
+        batch_s, batch_a, batch_s_, batch_r, batch_g = self.memory.sample(self.batch_size, device=self.device)
+
         q_currents = self.critic(batch_s, batch_g, batch_a)
         with torch.no_grad():  # target_Q has no gradient
             q_next = self.critic_target(batch_s_, batch_g, self.actor_target(batch_s_, batch_g))
-            q_targets = batch_r + self.gamma * q_next
+            q_targets = batch_r + self.gamma * q_next.detach()
 
         critic_loss = F.mse_loss(q_currents, q_targets)
         self.critic_optimizer.zero_grad()  # PyTorch中默认梯度会累积,这里需要显式将梯度置为0
@@ -100,6 +101,7 @@ class HERDDPG:
         for params in self.critic.parameters():
             params.requires_grad = True
 
+    def update_target_net(self):
         # soft update target net
         for params, target_params in zip(self.critic.parameters(), self.critic_target.parameters()):
             target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)

@@ -18,9 +18,9 @@ def args():
     parser.add_argument("--env_name", type=str, default="FetchPickAndPlace-v2", help="env name")
     parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
-    parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
+    parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
     # Training Params
-    parser.add_argument("--max_train_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
+    parser.add_argument("--max_train_steps", type=int, default=int(1e7), help=" Maximum number of training steps")
     parser.add_argument("--evaluate_freq", type=float, default=5e3,
                         help="Evaluate the policy every 'evaluate_freq' steps")
     parser.add_argument("--save_freq", type=int, default=5, help="Save frequency")
@@ -73,7 +73,7 @@ class HERDDPGModel(ModelBase):
                 desired_g = env_dict["desired_goal"]
             traj = Trajectory()
             ep_step = 0
-            ep+=1
+            ep += 1
             # begin a new episode
             while True:
                 ep_step += 1
@@ -96,6 +96,7 @@ class HERDDPGModel(ModelBase):
                 if total_steps >= self.random_steps and total_steps % self.update_freq == 0:
                     for _ in range(self.update_freq):
                         self.agent.update()
+                    self.agent.update_target_net()
 
                 if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
                     evaluate_num += 1
