@@ -7,6 +7,8 @@ from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
+from gymnasium.utils import env_checker
+
 from utils.replay_buffer import Trajectory
 
 local_path = os.path.dirname(__file__)
@@ -152,7 +154,9 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    env = gym.make(args.env_name, render_mode=None)  # 创建环境
+    env = gym.make(args.env_name, render_mode='human')  # 创建环境
+    # env_checker.check_env(env)
+
     state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
     goal_dim = env.observation_space.spaces["desired_goal"].shape[0]

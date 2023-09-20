@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.replay_buffer import Trajectory
 
 from robopal.demos.demo_pick_place import PickAndPlaceEnv
-from robopal.commons.gym_wrapper import GymWrapper
+from robopal.commons.gym_wrapper import GoalEnvWrapper as GymWrapper
 from gymnasium.utils import env_checker
 
 
@@ -168,11 +168,7 @@ def make_env(args):
         jnt_controller='IMPEDANCE',
     )
     env = GymWrapper(env)
-    obs, _ = env.reset()
-    print(obs)
-    print(env.observation_space)
-    print(obs in env.observation_space)
-    env_checker.check_env(env)
+    env_checker.check_env(env, skip_render_check=True)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
@@ -180,7 +176,7 @@ def make_env(args):
     max_action = float(env.action_space.high[0])
     min_action = float(env.action_space.low[0])
 
-    print(f"state dim:{state_dim}, action dim:{action_dim}, max_epi_steps:{env._max_episode_steps}")
+    print(f"state dim:{state_dim}, action dim:{action_dim}, max_epi_steps:{env.max_episode_steps}")
     print(f"max action:{max_action}, min action:{min_action}")
 
     setattr(args, 'state_dim', state_dim)
@@ -200,4 +196,4 @@ if __name__ == '__main__':
         env=env,
         args=args,
     )
-    # model.train()
+    model.train()
