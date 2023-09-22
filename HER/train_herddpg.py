@@ -122,7 +122,7 @@ class HERDDPGModel(ModelBase):
         self.env.close()
 
     def evaluate_policy(self):
-        times = 10
+        times = 5
         evaluate_reward = 0
         for _ in range(times):
             dict, _ = self.env_evaluate.reset()

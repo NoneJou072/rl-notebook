@@ -124,7 +124,7 @@ class HERDDPGModel(ModelBase):
         self.env.close()
 
     def evaluate_policy(self):
-        times = 10
+        times = 5
         evaluate_reward = 0
         for _ in range(times):
             dict, _ = self.env_evaluate.reset()
@@ -161,11 +161,11 @@ def make_env(args):
     env = PickAndPlaceEnv(
         robot=DianaGrasp(),
         renderer="viewer",
-        is_render=True,
+        is_render=False,
         control_freq=10,
         is_interpolate=False,
         is_pd=False,
-        jnt_controller='IMPEDANCE',
+        jnt_controller='JNTIMP',
     )
     env = GymWrapper(env)
     env_checker.check_env(env, skip_render_check=True)
