@@ -15,8 +15,8 @@
 | 👉 [REINFORCE](REINFORCE/REINFORCE.md)          | on-policy  | policy-based |
 | 👉 [actor-critic](actor-critic/actor-critic.md) | on-policy  | policy-based |
 | 👉 [A2C](A2C/A2C.md)                            | on-policy  | Actor-Critic |
-| 👉 [DDPG](HER/HER.md)                           | off-policy | Actor-Critic |
-| 👉 [HER-DDPG](DDPG/DDPG.md)                     | off-policy | Actor-Critic |
+| 👉 [DDPG](DDPG/DDPG.md)                        | off-policy | Actor-Critic |
+| 👉 [HER-DDPG](HER/HER.md)                     | off-policy | Actor-Critic |
 | 👉 [TD3](TD3/TD3.md)                            | off-policy | Actor-Critic |
 | ❌  [TRPO]()                                     | on-policy  | Actor-Critic |
 | 👉 [PPO-Continuous](PPO/PPO.md)                 | on-policy  | Actor-Critic |
