@@ -2,14 +2,13 @@ import os
 import gymnasium as gym
 import numpy as np
 import torch
-from utils.ContinuesBase import ContinuesBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 from utils.normalization import Normalization
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-print(torch.version.cuda)  # 打印CUDA版本
-print(torch.cuda.is_available())  # 检查CUDA是否可用
+print('CUDA version:', torch.version.cuda)  # 打印CUDA版本
+print('CUDA available:', torch.cuda.is_available())  # 检查CUDA是否可用
 
 local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')

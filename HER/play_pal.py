@@ -59,13 +59,7 @@ class HERDDPGModel(ModelBase):
         while total_steps < self.args.max_train_steps:
             env_dict, _ = self.env.reset()  # 重置环境，返回初始状态
             s = env_dict["observation"]
-            achieved_g = env_dict["achieved_goal"]
             desired_g = env_dict["desired_goal"]
-            while np.linalg.norm(achieved_g - desired_g) <= 0.05:
-                env_dict, _ = self.env.reset()
-                s = env_dict["observation"]
-                achieved_g = env_dict["achieved_goal"]
-                desired_g = env_dict["desired_goal"]
             while True:
                 total_steps += 1
                 a = self.agent.sample_action(s, desired_g, deterministic=True)  # 选择动作
@@ -73,7 +67,6 @@ class HERDDPGModel(ModelBase):
                 s = env_dict_["observation"].copy()
                 desired_g = env_dict_["desired_goal"].copy()
                 if truncated:
-                    print(a)
                     break
 
         self.env.close()

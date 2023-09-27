@@ -1,4 +1,6 @@
 import os
+from copy import deepcopy
+
 import numpy as np
 import torch
 
@@ -54,44 +56,25 @@ class HERDDPGModel(ModelBase):
     def train(self):
         """ 训练 """
         print("开始训练！")
-        ep = 0
         total_steps = 0
-        evaluate_num = 0
-        evaluate_rewards = []  # 记录每回合的奖励
-
         # Tensorboard config
         log_dir = os.path.join(log_path, f'./runs/{self.model_name}')
         writer = SummaryWriter(log_dir=log_dir)
 
         while total_steps < self.args.max_train_steps:
-            env_dict, _ = self.env.reset()  # 重置环境，返回初始状态
-            s = env_dict["observation"]
-            achieved_g = env_dict["achieved_goal"]  #
-            desired_g = env_dict["desired_goal"]
-            while np.linalg.norm(achieved_g - desired_g) <= 0.05:
-                env_dict, _ = self.env.reset()
-                s = env_dict["observation"]
-                achieved_g = env_dict["achieved_goal"]
-                desired_g = env_dict["desired_goal"]
-            traj = Trajectory()
-            ep_step = 0
-            ep += 1
-            # begin a new episode
-            while True:
-                ep_step += 1
-                a = self.agent.sample_action(s, desired_g)  # 选择动作
-                env_dict_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
+            obs, _ = self.env.reset()  # 重置环境，返回初始状态
+            while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
+                obs, _ = self.env.reset()
 
-                s_ = env_dict_["observation"]
-                achieved_g_ = env_dict_["achieved_goal"]
-                desired_g_ = env_dict_["desired_goal"]
+            traj = Trajectory()
+            while True:
+                a = self.agent.sample_action(obs["observation"], obs["desired_goal"])  # 选择动作
+                obs_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
 
                 # 保存transition
-                traj.push((s, a, s_, r, achieved_g, desired_g, achieved_g_))
+                traj.push((obs["observation"], a, obs_["observation"], r, obs["achieved_goal"], obs["desired_goal"], obs_["achieved_goal"]))
 
-                s = s_.copy()
-                achieved_g = achieved_g_.copy()
-                desired_g = desired_g_.copy()
+                obs = deepcopy(obs_)
 
                 # Take 50 steps,then update the networks 50 times
                 total_steps += 1
@@ -101,18 +84,19 @@ class HERDDPGModel(ModelBase):
                     self.agent.update_target_net()
 
                 if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
-                    evaluate_num += 1
                     evaluate_reward = self.evaluate_policy()
-                    evaluate_rewards.append(evaluate_reward)
-                    print(f"evaluate_num:{evaluate_num} \t evaluate_reward:{evaluate_reward} \t")
-                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_rewards[-1],
+                    print(f"total_steps:{total_steps} \t evaluate_reward:{evaluate_reward} \t")
+                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_reward,
                                       global_step=total_steps)
-                    # Save the Actor weights
-                    if evaluate_num % self.args.save_freq == 0:
-                        model_dir = os.path.join(log_path, f'./data_train/{self.agent.agent_name}')
-                        if not os.path.exists(model_dir):
-                            os.makedirs(model_dir)
-                        torch.save(self.agent.actor.state_dict(), os.path.join(model_dir, f'{self.model_name}.pth'))
+                    writer.add_scalar('critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
+                                      global_step=total_steps)
+                    writer.add_scalar('actor_loss_{}'.format(self.args.env_name), self.agent.actor_loss_record,
+                                      global_step=total_steps)
+                    # Save Actor weights
+                    model_dir = os.path.join(log_path, f'./data_train/{self.agent.agent_name}')
+                    if not os.path.exists(model_dir):
+                        os.makedirs(model_dir)
+                    torch.save(self.agent.actor.state_dict(), os.path.join(model_dir, f'{self.model_name}.pth'))
                 if truncated:
                     break
 
@@ -125,24 +109,17 @@ class HERDDPGModel(ModelBase):
         times = 5
         evaluate_reward = 0
         for _ in range(times):
-            dict, _ = self.env_evaluate.reset()
-            s = dict["observation"]
-            achieved_g = dict["achieved_goal"]
-            desired_g = dict["desired_goal"]
-            while np.linalg.norm(achieved_g - desired_g) <= 0.05:
-                env_dict, _ = self.env.reset()
-                s = env_dict["observation"]
-                achieved_g = env_dict["achieved_goal"]
-                desired_g = env_dict["desired_goal"]
+            obs, _ = self.env_evaluate.reset()
+            while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
+                obs, _ = self.env.reset()
             if self.args.use_state_norm:
-                s = self.state_norm(s, update=False)  # During the evaluating,update=False
+                obs = self.state_norm(obs, update=False)  # During the evaluating,update=False
             episode_reward = 0
             while True:
                 # We use the deterministic policy during the evaluating
-                action = self.agent.sample_action(s, desired_g, deterministic=True)
-                dict_, r, terminated, truncated, _ = self.env_evaluate.step(action)
-                s = dict_["observation"]
-                desired_g = dict_["desired_goal"]
+                action = self.agent.sample_action(obs["observation"], obs["desired_goal"], deterministic=True)
+                obs_, r, terminated, truncated, _ = self.env_evaluate.step(action)
+                obs = obs_
 
                 episode_reward += r
                 if truncated:
@@ -154,7 +131,7 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    env = gym.make(args.env_name, render_mode='human')  # 创建环境
+    env = gym.make(args.env_name, render_mode=None)  # 创建环境
     # env_checker.check_env(env)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]

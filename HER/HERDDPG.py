@@ -62,17 +62,20 @@ class HERDDPG:
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=args.lr)  # 优化器
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=args.lr)  # 优化器
 
+        self.critic_loss_record = None
+        self.actor_loss_record = None
+
     def sample_action(self, s, g, deterministic=False):
         with torch.no_grad():
             s = torch.unsqueeze(torch.tensor(s, dtype=torch.float32), 0).to(self.device)
             g = torch.unsqueeze(torch.tensor(g, dtype=torch.float32), 0).to(self.device)
             a = self.actor(s, g).data.cpu().numpy().flatten()
             if not deterministic:
-                a += self.sigma * np.random.randn(self.action_dim)
+                a += self.sigma * np.random.randn(self.action_dim)  # gaussian noise
                 a = np.clip(a, -self.max_action, self.max_action)
                 random_actions = np.random.uniform(low=-self.max_action, high=self.max_action,
                                                    size=self.action_dim)
-                a += np.random.binomial(1, 0.3, 1)[0] * (random_actions - a)
+                a += np.random.binomial(1, 0.3, 1)[0] * (random_actions - a)  # eps-greedy
             return a
 
     def update(self):
@@ -84,6 +87,7 @@ class HERDDPG:
             q_targets = batch_r + self.gamma * q_next.detach()
 
         critic_loss = F.mse_loss(q_currents, q_targets)
+        self.critic_loss_record = critic_loss.item()
         self.critic_optimizer.zero_grad()  # PyTorch中默认梯度会累积,这里需要显式将梯度置为0
         critic_loss.backward()  # 反向传播更新参数
         self.critic_optimizer.step()
@@ -93,6 +97,7 @@ class HERDDPG:
             params.requires_grad = False
 
         actor_loss = -self.critic(batch_s, batch_g, self.actor(batch_s, batch_g)).mean()
+        self.actor_loss_record = actor_loss.item()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
