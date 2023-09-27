@@ -81,9 +81,9 @@ class HERDDPGModel(ModelBase):
 
                 if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
                     evaluate_reward = self.evaluate_policy()
-                    print(f"total_steps:{total_steps} \t evaluate_reward:{evaluate_reward} \t")
+                    print(f"timestep:{total_steps} \t evaluate_reward:{evaluate_reward} \t")
 
-                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_rewards[-1],
+                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_reward,
                                       global_step=total_steps)
                     writer.add_scalar('critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
                                       global_step=total_steps)
