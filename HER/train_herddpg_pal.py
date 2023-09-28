@@ -1,6 +1,7 @@
 import os
 import torch
 from copy import deepcopy
+import shutil
 from HER.HERDDPG import HERDDPG
 from utils.ModelBase import ModelBase
 import argparse
@@ -58,6 +59,8 @@ class HERDDPGModel(ModelBase):
         total_steps = 0
         # Tensorboard config
         log_dir = os.path.join(log_path, f'./runs/{self.model_name}')
+        if os.path.exists(log_dir):
+            shutil.rmtree(log_dir)
         writer = SummaryWriter(log_dir=log_dir)
 
         while total_steps < self.args.max_train_steps:
