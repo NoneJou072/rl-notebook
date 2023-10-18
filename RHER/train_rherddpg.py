@@ -1,15 +1,13 @@
 import os
 from copy import deepcopy
-import shutil
 import numpy as np
 import torch
 
-from HER.HERDDPG import HERDDPG
+from RHER.RHERDDPG import HERDDPG
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
-from gymnasium.utils import env_checker
 from utils.normalization import Normalization
 
 from utils.replay_buffer import Trajectory
@@ -20,13 +18,13 @@ log_path = os.path.join(local_path, 'log')
 
 def args():
     parser = argparse.ArgumentParser("Hyperparameters Setting for DDPG")
-    parser.add_argument("--env_name", type=str, default="FetchPickAndPlace-v2", help="env name")
+    parser.add_argument("--env_name", type=str, default="FetchPush-v2", help="env name")
     parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
     # Training Params
     parser.add_argument("--max_train_steps", type=int, default=int(1e7), help=" Maximum number of training steps")
-    parser.add_argument("--evaluate_freq", type=float, default=5e3,
+    parser.add_argument("--evaluate_freq", type=float, default=1e3,
                         help="Evaluate the policy every 'evaluate_freq' steps")
     parser.add_argument("--save_freq", type=int, default=5, help="Save frequency")
     parser.add_argument("--buffer_size", type=int, default=int(1e6), help="Reply buffer size")
@@ -63,8 +61,15 @@ class HERDDPGModel(ModelBase):
         total_steps = 0
         # Tensorboard config
         log_dir = os.path.join(log_path, f'./runs/{self.model_name}')
+        # 检测该路径后缀是否存在，存在则向后追加
         if os.path.exists(log_dir):
-            shutil.rmtree(log_dir)
+            i = 1
+            while os.path.exists(log_dir + '_' + str(i)):
+                i += 1
+            log_dir = log_dir + '_' + str(i)
+
+        # if os.path.exists(log_dir):
+        #     shutil.rmtree(log_dir)
         writer = SummaryWriter(log_dir=log_dir)
 
         while total_steps < self.args.max_train_steps:
@@ -74,11 +79,9 @@ class HERDDPGModel(ModelBase):
 
             traj = Trajectory()
             while True:
-                # obs = self.state_norm(obs, update=True)
-                a = self.agent.sample_action(obs["observation"], obs["desired_goal"])  # 选择动作
+                a = self.agent.sample_action(obs, deterministic=False)  # 选择动作
                 obs_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
 
-                # obs_ = self.state_norm(obs_, update=True)
                 # 保存transition
                 traj.push((obs["observation"], a, obs_["observation"], r, obs["achieved_goal"], obs["desired_goal"], obs_["achieved_goal"]))
 
@@ -88,12 +91,14 @@ class HERDDPGModel(ModelBase):
                 total_steps += 1
                 if total_steps >= self.random_steps and total_steps % self.update_freq == 0:
                     for _ in range(self.update_freq):
-                        self.agent.update()
+                        self.agent.update(rekey='g')
+                        self.agent.update(rekey='ag')
                     self.agent.update_target_net()
 
                 if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
-                    evaluate_reward = self.evaluate_policy()
-                    print(f"total_steps:{total_steps} \t evaluate_reward:{evaluate_reward} \t")
+                    evaluate_reward, evaluate_reward_reach = self.evaluate_policy()
+                    print(f"total_steps:{total_steps} \t evaluate_reward:{evaluate_reward} \t "
+                          f"evaluate_reward_reach:{evaluate_reward_reach}\t success_rate:{.0}")
                     writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_reward,
                                       global_step=total_steps)
                     writer.add_scalar('critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
@@ -116,24 +121,43 @@ class HERDDPGModel(ModelBase):
     def evaluate_policy(self):
         times = 5
         evaluate_reward = 0
+        success_rate = 0
         for _ in range(times):
             episode_reward = 0
             obs, _ = self.env_evaluate.reset()
             while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
                 obs, _ = self.env.reset()
             while True:
-                # obs = self.state_norm(obs, update=False)  # During the evaluating,update=False
                 # We use the deterministic policy during the evaluating
-                action = self.agent.sample_action(obs["observation"], obs["desired_goal"], deterministic=True)
-                obs_, r, terminated, truncated, _ = self.env_evaluate.step(action)
-                obs = obs_
+                action = self.agent.sample_action(obs, deterministic=True)
+                obs, r, terminated, truncated, info = self.env_evaluate.step(action)
 
                 episode_reward += r
                 if truncated:
+                    success_rate += info['is_success']
                     break
             evaluate_reward += episode_reward
 
-        return evaluate_reward / times
+        evaluate_reward_reach = 0
+        for _ in range(times):
+            episode_reward = 0
+            obs, _ = self.env_evaluate.reset()
+            while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
+                obs, _ = self.env.reset()
+            while True:
+                obs['desired_goal'] *= 0
+                s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
+                g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
+                ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
+                action = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
+                obs, r, terminated, truncated, _ = self.env_evaluate.step(action)
+                r = self.env.unwrapped.compute_reward(obs['observation'][:3], obs['achieved_goal'], None)
+                episode_reward += r
+                if truncated:
+                    break
+            evaluate_reward_reach += episode_reward
+
+        return evaluate_reward / times, evaluate_reward_reach / times, success_rate / times
 
 
 def make_env(args):

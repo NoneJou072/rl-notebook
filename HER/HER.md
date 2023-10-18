@@ -61,3 +61,4 @@ HER 方法可以通过目标重标记策略，产生足够数量的非负奖励�
 2. [【强化学习算法 34】HER - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/51357496)
 3. [[强化学习5] HER（Hindsight Experience Replay） - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/403527126)
 4. [[2208.00843] Relay Hindsight Experience Replay: Self-Guided Continual Reinforcement Learning for Sequential Object Manipulation Tasks with Sparse Rewards (arxiv.org)](https://arxiv.org/abs/2208.00843)
+5. [baselines/baselines/her at master · openai/baselines (github.com)](https://github.com/openai/baselines/tree/master/baselines/her)

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from utils.ModelBase import ModelBase
 
-from HER.HERDDPG import HERDDPG
+from RHER.RHERDDPG import HERDDPG
 import argparse
 import gymnasium as gym
 
@@ -13,7 +13,7 @@ log_path = os.path.join(local_path, 'log')
 
 def args():
     parser = argparse.ArgumentParser("Hyperparameters Setting for DDPG")
-    parser.add_argument("--env_name", type=str, default="FetchPickAndPlace-v2", help="env name")
+    parser.add_argument("--env_name", type=str, default="FetchPush-v2", help="env name")
     parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
@@ -53,26 +53,23 @@ class HERDDPGModel(ModelBase):
         self.agent.actor.load_state_dict(actor_state_dict)
 
     def play(self):
-        total_steps = 0
-        while total_steps < self.args.max_train_steps:
-            env_dict, _ = self.env.reset()  # 重置环境，返回初始状态
-            s = env_dict["observation"]
-            achieved_g = env_dict["achieved_goal"]
-            desired_g = env_dict["desired_goal"]
-            while np.linalg.norm(achieved_g - desired_g) <= 0.05:
-                env_dict, _ = self.env.reset()
-                s = env_dict["observation"]
-                achieved_g = env_dict["achieved_goal"]
-                desired_g = env_dict["desired_goal"]
-            while True:
-                total_steps += 1
-                a = self.agent.sample_action(s, desired_g, deterministic=True)  # 选择动作
-                print(a)
-                env_dict_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
-                s = env_dict_["observation"].copy()
-                desired_g = env_dict_["desired_goal"].copy()
-                if truncated:
-                    break
+        obs, _ = self.env.reset()
+        while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
+            obs, _ = self.env.reset()
+        for _ in range(self.args.max_train_steps):
+            # obs['desired_goal'] *= 0
+            # s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
+            # g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
+            # ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
+            # a = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
+            a = self.agent.sample_action(obs, deterministic=True)  # 选择动作
+            obs, r, terminated, truncated, info = self.env.step(a)  # 更新环境，返回transition
+            if truncated:
+                success = info['is_success']
+                print(success)
+                obs, _ = self.env.reset()
+                while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
+                    obs, _ = self.env.reset()
 
         self.env.close()
 

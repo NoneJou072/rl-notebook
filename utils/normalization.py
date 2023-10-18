@@ -26,12 +26,20 @@ class Normalization:
     def __init__(self, shape):
         self.running_ms = RunningMeanStd(shape=shape)
 
-    def __call__(self, x, update=True):
+    def __call__(self, obs, update=True):
         # Whether to update the mean and std,during the evaluating,update=False
+        if isinstance(obs, dict):
+            x = np.concatenate([obs['observation'], obs['desired_goal']], axis=0)
+        else:
+            x = obs
         if update:
             self.running_ms.update(x)
         x = (x - self.running_ms.mean) / (self.running_ms.std + 1e-8)
 
+        if isinstance(obs, dict):
+            obs['observation'] = x[:obs['observation'].shape[0]]
+            obs['desired_goal'] = x[obs['observation'].shape[0]:]
+            return obs
         return x
 
 
