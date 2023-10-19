@@ -51,9 +51,6 @@ class HERDDPGModel(ModelBase):
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
-        self.state_norm = Normalization(
-            env.observation_space.spaces["observation"].shape[0] + env.observation_space.spaces["desired_goal"].shape[0]
-        )
 
     def train(self):
         """ 训练 """
@@ -68,8 +65,6 @@ class HERDDPGModel(ModelBase):
                 i += 1
             log_dir = log_dir + '_' + str(i)
 
-        # if os.path.exists(log_dir):
-        #     shutil.rmtree(log_dir)
         writer = SummaryWriter(log_dir=log_dir)
 
         while total_steps < self.args.max_train_steps:
@@ -91,15 +86,17 @@ class HERDDPGModel(ModelBase):
                 total_steps += 1
                 if total_steps >= self.random_steps and total_steps % self.update_freq == 0:
                     for _ in range(self.update_freq):
-                        self.agent.update(rekey='g')
+                        # self.agent.update(rekey='g')
                         self.agent.update(rekey='ag')
                     self.agent.update_target_net()
 
                 if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
-                    evaluate_reward, evaluate_reward_reach = self.evaluate_policy()
+                    evaluate_reward, evaluate_reward_reach, success_rate = self.evaluate_policy()
                     print(f"total_steps:{total_steps} \t evaluate_reward:{evaluate_reward} \t "
-                          f"evaluate_reward_reach:{evaluate_reward_reach}\t success_rate:{.0}")
+                          f"evaluate_reward_reach:{evaluate_reward_reach}\t success_rate:{success_rate}")
                     writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_reward,
+                                      global_step=total_steps)
+                    writer.add_scalar('success_rate_{}'.format(self.args.env_name), success_rate,
                                       global_step=total_steps)
                     writer.add_scalar('critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
                                       global_step=total_steps)
@@ -112,8 +109,17 @@ class HERDDPGModel(ModelBase):
                     torch.save(self.agent.actor.state_dict(), os.path.join(model_dir, f'{self.model_name}.pth'))
                 if truncated:
                     break
-
+            # 将轨迹分割成子任务1和子任务2的，其中，子任务2使用完整的轨迹
+            traj_reach = Trajectory()
+            for trans in traj.buffer:
+                reached = self.agent.check_reached(trans[0][:3], trans[4])
+                if reached:
+                    break
+                traj_reach.push(trans)
             self.agent.memory.push(traj)
+            self.agent.memory_reach.push(traj_reach)
+            del traj
+            del traj_reach
 
         print("完成训练！")
         self.env.close()

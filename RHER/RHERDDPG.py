@@ -46,6 +46,7 @@ class HERDDPG:
 
         self.batch_size = args.batch_size
         self.memory = HERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
+        self.memory_reach = HERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
 
         self.state_dim = args.state_dim
         self.goal_dim = args.goal_dim
@@ -118,14 +119,17 @@ class HERDDPG:
                 if not reach_a:
                     random_actions = np.random.uniform(low=-self.max_action, high=self.max_action,
                                                        size=self.action_dim)
-                    a += np.random.binomial(1, 0.3, 1)[0] * (random_actions - a)  # eps-greedy
+                    a += np.random.binomial(1, rd, self.action_dim) * (random_actions - a)  # eps-greedy
             return a
 
     def update(self, rekey='g'):
-        batch_s, batch_a, batch_s_, batch_r, batch_g, batch_ag = self.memory.sample(self.batch_size, device=self.device, rekey=rekey)
         if rekey == 'g':
+            batch_s, batch_a, batch_s_, batch_r, batch_g, batch_ag = self.memory.sample(self.batch_size,
+                                                                                        device=self.device, rekey=rekey)
             batch_ag *= 0
         else:
+            batch_s, batch_a, batch_s_, batch_r, batch_g, batch_ag = self.memory_reach.sample(self.batch_size,
+                                                                                        device=self.device, rekey=rekey)
             batch_g *= 0
 
         q_currents = self.critic(batch_s, batch_g, batch_ag, batch_a)

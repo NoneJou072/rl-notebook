@@ -21,9 +21,15 @@ class HERReplayBuffer(ReplayBuffer):
         self.buffer.append(trajectory)
 
     def sample(self, batch_size: int = 256, sequential: bool = True, with_log=True, device='cpu', rekey='g'):
-        # 随机取 batch size 个回合索引和时间步索引
+        # 随机取 batch size 个回合索引和每回合的时间步索引
         ep_indices = np.random.randint(0, len(self.buffer), batch_size)
-        time_indices = np.random.randint(0, len(self.buffer[0]), batch_size)
+
+        time_indices = []
+        for episode in ep_indices:
+            ep_len = len(self.buffer[episode])
+            time_indices.append(np.random.randint(0, ep_len))
+        time_indices = np.array(time_indices)
+
         states = []
         actions = []
         next_states = []

@@ -20,7 +20,7 @@ log_path = os.path.join(local_path, 'log')
 
 def args():
     parser = argparse.ArgumentParser("Hyperparameters Setting for DDPG")
-    parser.add_argument("--env_name", type=str, default="FetchPickAndPlace-v2", help="env name")
+    parser.add_argument("--env_name", type=str, default="FetchReach-v2", help="env name")
     parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")

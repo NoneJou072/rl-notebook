@@ -57,12 +57,12 @@ class HERDDPGModel(ModelBase):
         while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
             obs, _ = self.env.reset()
         for _ in range(self.args.max_train_steps):
-            # obs['desired_goal'] *= 0
-            # s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
-            # g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
-            # ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
-            # a = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
-            a = self.agent.sample_action(obs, deterministic=True)  # 选择动作
+            obs['desired_goal'] *= 0
+            s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
+            g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
+            ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
+            a = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
+            # a = self.agent.sample_action(obs, deterministic=True)  # 选择动作
             obs, r, terminated, truncated, info = self.env.step(a)  # 更新环境，返回transition
             if truncated:
                 success = info['is_success']
