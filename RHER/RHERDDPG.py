@@ -12,13 +12,17 @@ class Actor(nn.Module):
         self.max_action = max_action
         self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim, hidden_dim)  # 输入层
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc3 = nn.Linear(hidden_dim, action_dim)  # 输出层
+        self.fc3 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
+        self.fc4 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
+        self.fc5 = nn.Linear(hidden_dim, action_dim)  # 输出层
 
     def forward(self, s, g, ag):
         s_g = torch.cat([s, g, ag], 1)
         a = F.relu(self.fc1(s_g))
         a = F.relu(self.fc2(a))
-        a = self.max_action * torch.tanh(self.fc3(a))
+        a = F.relu(self.fc3(a))
+        a = F.relu(self.fc4(a))
+        a = self.max_action * torch.tanh(self.fc5(a))
         return a
 
 
@@ -27,13 +31,17 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim + action_dim, hidden_dim)  # 输入层
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc3 = nn.Linear(hidden_dim, 1)  # 输出层
+        self.fc3 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
+        self.fc4 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
+        self.fc5 = nn.Linear(hidden_dim, 1)  # 输出层
 
     def forward(self, s, g, ag, a):
         s_a = torch.cat([s, g, ag, a], 1)
         q = F.relu(self.fc1(s_a))
         q = F.relu(self.fc2(q))
-        return self.fc3(q)
+        q = F.relu(self.fc3(q))
+        q = F.relu(self.fc4(q))
+        return self.fc5(q)
 
 
 class HERDDPG:
@@ -66,7 +74,7 @@ class HERDDPG:
         self.critic_loss_record = None
         self.actor_loss_record = None
 
-    def check_reached(self, gg, ag, reward_func=None, th=0.03):
+    def check_reached(self, gg, ag, reward_func=None, th=0.05):
         """ Check if the gripper has reached the goal position.
         :param gg: goal position
         :param ag: actual position

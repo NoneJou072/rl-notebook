@@ -46,7 +46,7 @@ class Critic(nn.Module):
         return q1, q2
 
 
-class DDPG:
+class TD3:
     def __init__(self, args):
         self.sigma = args.sigma
         self.agent_name = args.algo_name

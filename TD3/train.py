@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from TD3 import DDPG
+from TD3 import TD3
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -40,7 +40,7 @@ def args():
 class DDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = DDPG(args)
+        self.agent = TD3(args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
