@@ -40,6 +40,7 @@ def args():
                         help="Take the random actions in the beginning for the better exploration")
     parser.add_argument("--update_freq", type=int, default=50, help="Take 50 steps,then update the networks 50 times")
     parser.add_argument("--k_future", type=int, default=4, help="Her k future")
+    parser.add_argument("--sigma", type=int, default=0.2, help="The std of Gaussian noise for exploration")
 
     return parser.parse_args()
 
@@ -51,6 +52,7 @@ class HERDDPGModel(ModelBase):
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
+        self.max_train_steps = args.max_train_steps
 
     def train(self):
         """ 训练 """
@@ -67,7 +69,7 @@ class HERDDPGModel(ModelBase):
 
         writer = SummaryWriter(log_dir=log_dir)
 
-        while total_steps < self.args.max_train_steps:
+        while total_steps < self.max_train_steps:
             obs, _ = self.env.reset()  # 重置环境，返回初始状态
             while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
                 obs, _ = self.env.reset()
@@ -77,7 +79,6 @@ class HERDDPGModel(ModelBase):
                 a = self.agent.sample_action(obs, deterministic=False)  # 选择动作
                 obs_, r, terminated, truncated, _ = self.env.step(a)  # 更新环境，返回transition
 
-                # 保存transition
                 traj.push((obs["observation"], a, obs_["observation"], r, obs["achieved_goal"], obs["desired_goal"], obs_["achieved_goal"]))
 
                 obs = deepcopy(obs_)
@@ -86,7 +87,7 @@ class HERDDPGModel(ModelBase):
                 total_steps += 1
                 if total_steps >= self.random_steps and total_steps % self.update_freq == 0:
                     for _ in range(self.update_freq):
-                        # self.agent.update(rekey='g')
+                        self.agent.update(rekey='g')
                         self.agent.update(rekey='ag')
                     self.agent.update_target_net()
 
@@ -112,14 +113,13 @@ class HERDDPGModel(ModelBase):
             # 将轨迹分割成子任务1和子任务2的，其中，子任务2使用完整的轨迹
             traj_reach = Trajectory()
             for trans in traj.buffer:
-                reached = self.agent.check_reached(trans[0][:3], trans[4])
+                reached = self.agent.check_reached(trans[2][:3], trans[6])
                 if reached:
                     break
                 traj_reach.push(trans)
+
             self.agent.memory.push(traj)
             self.agent.memory_reach.push(traj_reach)
-            del traj
-            del traj_reach
 
         print("完成训练！")
         self.env.close()
@@ -169,7 +169,6 @@ class HERDDPGModel(ModelBase):
 def make_env(args):
     """ 配置环境 """
     env = gym.make(args.env_name, render_mode=None)  # 创建环境
-    # env_checker.check_env(env)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
@@ -185,7 +184,6 @@ def make_env(args):
     setattr(args, 'goal_dim', goal_dim)
     setattr(args, 'max_episode_steps', env._max_episode_steps)
     setattr(args, 'max_action', max_action)
-    setattr(args, 'sigma', 0.2)  # The std of Gaussian noise for exploration
 
     return env
 

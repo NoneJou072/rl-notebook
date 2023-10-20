@@ -53,9 +53,12 @@ class HERReplayBuffer(ReplayBuffer):
 
         # 根据 future k 概率随机选择要在批量中替换的索引
         her_indices = np.where(np.random.uniform(size=batch_size) < self.future_p)
-        future_offset = np.random.uniform(size=batch_size) * (len(self.buffer[0]) - time_indices)
-        future_offset = future_offset.astype(int)
-        future_t = (time_indices + future_offset)[her_indices]
+        future_offsets = np.random.uniform(size=batch_size) * (len(self.buffer[0]) - time_indices)
+        future_offset = []
+        for episode, timestep in zip(ep_indices, time_indices):
+            future_offset.append(np.random.randint(timestep, len(self.buffer[episode])))
+        future_offset = np.array(future_offset).astype(int)
+        future_t = future_offset[her_indices]
 
         if rekey == 'g':
             future_ag = []
@@ -64,6 +67,7 @@ class HERReplayBuffer(ReplayBuffer):
             future_ag = np.vstack(future_ag)
             desired_goals[her_indices] = future_ag
             rewards = np.expand_dims(self.env.unwrapped.compute_reward(next_states[:, 3:6], desired_goals, None), 1)
+            achieved_goals *= 0
         else:
             future_ag = []
             for epi, f_offset in zip(ep_indices[her_indices], future_t):
@@ -71,12 +75,13 @@ class HERReplayBuffer(ReplayBuffer):
             future_ag = np.vstack(future_ag)
             achieved_goals[her_indices] = future_ag
             rewards = np.expand_dims(self.env.unwrapped.compute_reward(next_states[:, :3], achieved_goals, None), 1)
+            desired_goals *= 0
 
-        s = torch.tensor(np.asarray(states), dtype=torch.float).to(device)
-        a = torch.tensor(np.asarray(actions), dtype=torch.float).to(device)
-        s_ = torch.tensor(np.asarray(next_states), dtype=torch.float).to(device)
-        r = torch.tensor(np.asarray(rewards), dtype=torch.float).to(device)
-        g = torch.tensor(np.asarray(desired_goals), dtype=torch.float).to(device)
-        ag = torch.tensor(np.asarray(achieved_goals), dtype=torch.float).to(device)
+        s = torch.tensor(states, dtype=torch.float).to(device)
+        a = torch.tensor(actions, dtype=torch.float).to(device)
+        s_ = torch.tensor(next_states, dtype=torch.float).to(device)
+        r = torch.tensor(rewards, dtype=torch.float).to(device)
+        g = torch.tensor(desired_goals, dtype=torch.float).to(device)
+        ag = torch.tensor(achieved_goals, dtype=torch.float).to(device)
 
         return s, a, s_, r, g, ag

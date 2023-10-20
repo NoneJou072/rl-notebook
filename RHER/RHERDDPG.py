@@ -90,11 +90,7 @@ class HERDDPG:
 
         last_obs = copy.deepcopy(s)
         reached = self.check_reached(last_obs['observation'][:3], last_obs['achieved_goal'])
-        """
-            |        |stage1 |stage2 |
-            |train:  |p1+p2  |p2     |
-            |test:   |p2     |p2     |
-        """
+
         if not deterministic:
             # 在 reach 阶段，有 40%的概率采用 reach 策略, 20% 概率采用随机策略，40% 概率采用 push 策略。
             if np.random.random() < rr and not reached:
@@ -119,6 +115,7 @@ class HERDDPG:
                 if not reach_a:
                     random_actions = np.random.uniform(low=-self.max_action, high=self.max_action,
                                                        size=self.action_dim)
+
                     a += np.random.binomial(1, rd, self.action_dim) * (random_actions - a)  # eps-greedy
             return a
 
@@ -126,11 +123,9 @@ class HERDDPG:
         if rekey == 'g':
             batch_s, batch_a, batch_s_, batch_r, batch_g, batch_ag = self.memory.sample(self.batch_size,
                                                                                         device=self.device, rekey=rekey)
-            batch_ag *= 0
         else:
             batch_s, batch_a, batch_s_, batch_r, batch_g, batch_ag = self.memory_reach.sample(self.batch_size,
                                                                                         device=self.device, rekey=rekey)
-            batch_g *= 0
 
         q_currents = self.critic(batch_s, batch_g, batch_ag, batch_a)
         with torch.no_grad():  # target_Q has no gradient
