@@ -10,16 +10,18 @@ class Actor(nn.Module):
     def __init__(self, state_dim, goal_dim, action_dim, hidden_dim, max_action):
         super(Actor, self).__init__()
         self.max_action = max_action
-        self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim, hidden_dim)  # 输入层
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc5 = nn.Linear(hidden_dim, action_dim)  # 输出层
+        self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc4 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc5 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, s, g, ag):
         s_g = torch.cat([s, g, ag], 1)
         a = F.relu(self.fc1(s_g))
         a = F.relu(self.fc2(a))
         a = F.relu(self.fc3(a))
+        a = F.relu(self.fc4(a))
         a = self.max_action * torch.tanh(self.fc5(a))
         return a
 
@@ -27,26 +29,45 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim, goal_dim, action_dim, hidden_dim=128):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim + action_dim, hidden_dim)  # 输入层
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)  # 隐藏层
-        self.fc5 = nn.Linear(hidden_dim, 1)  # 输出层
+        # NET1
+        self.fc1 = nn.Linear(state_dim + goal_dim + goal_dim + action_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc4 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc5 = nn.Linear(hidden_dim, 1)
+        # NET2
+        self.fc6 = nn.Linear(state_dim + goal_dim + goal_dim + action_dim, hidden_dim)
+        self.fc7 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc8 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc9 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc10 = nn.Linear(hidden_dim, 1)
 
     def forward(self, s, g, ag, a):
         s_a = torch.cat([s, g, ag, a], 1)
-        q = F.relu(self.fc1(s_a))
-        q = F.relu(self.fc2(q))
-        q = F.relu(self.fc3(q))
-        return self.fc5(q)
+        q1 = F.relu(self.fc1(s_a))
+        q1 = F.relu(self.fc2(q1))
+        q1 = F.relu(self.fc3(q1))
+        q1 = F.relu(self.fc4(q1))
+        q1 = self.fc5(q1)
+
+        q2 = F.relu(self.fc6(s_a))
+        q2 = F.relu(self.fc7(q2))
+        q2 = F.relu(self.fc8(q2))
+        q2 = F.relu(self.fc9(q2))
+        q2 = self.fc10(q2)
+
+        return q1, q2
 
 
-class HERDDPG:
+class RHERTD3:
     def __init__(self, env, args):
         self.sigma = args.sigma
         self.agent_name = args.algo_name
         self.device = torch.device(args.device)
         self.gamma = args.gamma  # 奖励的折扣因子
         self.tau = args.tau
+        self.k_update = args.k_update
+        self.training_times = 0
 
         self.batch_size = args.batch_size
         self.memory = HERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
@@ -58,8 +79,7 @@ class HERDDPG:
         self.hidden_dim = args.hidden_dim
         self.max_action = args.max_action
 
-        self.actor = Actor(self.state_dim, self.goal_dim, self.action_dim, self.hidden_dim, self.max_action).to(
-            self.device)
+        self.actor = Actor(self.state_dim, self.goal_dim, self.action_dim, self.hidden_dim, self.max_action).to(self.device)
         self.critic = Critic(self.state_dim, self.goal_dim, self.action_dim, self.hidden_dim).to(self.device)
         self.actor_target = copy.deepcopy(self.actor)
         self.critic_target = copy.deepcopy(self.critic)
@@ -123,13 +143,16 @@ class HERDDPG:
                     a += np.random.binomial(1, rd, self.action_dim) * (random_actions - a)  # eps-greedy
             return a
 
-    def update(self):
+    def update(self, rekey='g'):
+        self.training_times += 1
 
         batch_s_2, batch_a_2, batch_s_2_, batch_r_2, batch_g_2, batch_ag_2 = self.memory.sample(self.batch_size,
-                                                                                    device=self.device, rekey='g')
+                                                                                                device=self.device,
+                                                                                                rekey='g')
 
         batch_s_1, batch_a_1, batch_s_1_, batch_r_1, batch_g_1, batch_ag_1 = self.memory_reach.sample(self.batch_size,
-                                                                                    device=self.device, rekey='ag')
+                                                                                                      device=self.device,
+                                                                                                      rekey='ag')
         batch_s = torch.concatenate((batch_s_1, batch_s_2))
         batch_a = torch.concatenate((batch_a_1, batch_a_2))
         batch_s_ = torch.concatenate((batch_s_1_, batch_s_2_))
@@ -137,30 +160,34 @@ class HERDDPG:
         batch_g = torch.concatenate((batch_g_1, batch_g_2))
         batch_ag = torch.concatenate((batch_ag_1, batch_ag_2))
 
-        q_currents = self.critic(batch_s, batch_g, batch_ag, batch_a)
+        q_currents1, q_currents2 = self.critic(batch_s, batch_g, batch_ag, batch_a)
         with torch.no_grad():  # target_Q has no gradient
-            q_next = self.critic_target(batch_s_, batch_g, batch_ag, self.actor_target(batch_s_, batch_g, batch_ag))
-            q_targets = batch_r + self.gamma * q_next.detach()
+            # Clipped dobule Q-learning
+            q_next1, q_next2 = self.critic_target(batch_s_, batch_g, batch_ag, self.actor_target(batch_s_, batch_g, batch_ag))
+            q_targets = batch_r + self.gamma * torch.min(q_next1, q_next2)
 
-        critic_loss = F.mse_loss(q_currents, q_targets)
+        critic_loss = F.mse_loss(q_currents1, q_targets) + F.mse_loss(q_currents2, q_targets)
         self.critic_loss_record = critic_loss.item()
         self.critic_optimizer.zero_grad()  # PyTorch中默认梯度会累积,这里需要显式将梯度置为0
         critic_loss.backward()  # 反向传播更新参数
         self.critic_optimizer.step()
 
-        # Freeze critic networks so you don't waste computational effort
-        for params in self.critic.parameters():
-            params.requires_grad = False
+        # Delayed policy updates
+        if self.training_times % self.k_update == 0:
+            # Freeze critic networks so you don't waste computational effort
+            for params in self.critic.parameters():
+                params.requires_grad = False
 
-        actor_loss = -self.critic(batch_s, batch_g, batch_ag, self.actor(batch_s, batch_g, batch_ag)).mean()
-        self.actor_loss_record = actor_loss.item()
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
+            q_currents1, q_currents2 = self.critic(batch_s, batch_g, batch_ag, self.actor(batch_s, batch_g, batch_ag))
+            actor_loss = -torch.min(q_currents1, q_currents2).mean()
+            self.actor_loss_record = actor_loss.item()
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
 
-        # Unfreeze critic networks
-        for params in self.critic.parameters():
-            params.requires_grad = True
+            # Unfreeze critic networks
+            for params in self.critic.parameters():
+                params.requires_grad = True
 
     def update_target_net(self):
         # soft update target net
@@ -169,3 +196,4 @@ class HERDDPG:
 
         for params, target_params in zip(self.actor.parameters(), self.actor_target.parameters()):
             target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)
+

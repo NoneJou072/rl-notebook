@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from RHER.RHERDDPG import HERDDPG
+from RHER.RHERTD3 import RHERTD3
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter
@@ -16,9 +17,9 @@ log_path = os.path.join(local_path, 'log')
 
 
 def args():
-    parser = argparse.ArgumentParser("Hyperparameters Setting for RHERDDPG")
+    parser = argparse.ArgumentParser("Hyperparameters Setting for RHERTD3")
     parser.add_argument("--env_name", type=str, default="FetchPush-v2", help="env name")
-    parser.add_argument("--algo_name", type=str, default="RHERDDPG", help="algorithm name")
+    parser.add_argument("--algo_name", type=str, default="RHERTD3", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
     # Training Params
@@ -40,6 +41,7 @@ def args():
     parser.add_argument("--update_freq", type=int, default=40, help="Take 50 steps,then update the networks 50 times")
     parser.add_argument("--k_future", type=int, default=4, help="Her k future")
     parser.add_argument("--sigma", type=int, default=0.2, help="The std of Gaussian noise for exploration")
+    parser.add_argument("--k_update", type=bool, default=2, help="Delayed policy update frequence")
 
     return parser.parse_args()
 
@@ -47,7 +49,7 @@ def args():
 class HERDDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = HERDDPG(env, args)
+        self.agent = RHERTD3(env, args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
