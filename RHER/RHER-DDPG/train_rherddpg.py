@@ -12,7 +12,7 @@ import gymnasium as gym
 from utils.replay_buffer import Trajectory
 
 local_path = os.path.dirname(__file__)
-log_path = os.path.join(local_path, 'log')
+log_path = os.path.join(local_path, '../log')
 
 
 def args():

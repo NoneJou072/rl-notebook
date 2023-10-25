@@ -5,25 +5,25 @@ import numpy as np
 import torch
 from utils.ModelBase import ModelBase
 
-from RHER.RHERTD3 import RHERTD3
+from RHER.RHERDDPG import HERDDPG
 import argparse
 import gymnasium as gym
 
 local_path = os.path.dirname(__file__)
-log_path = os.path.join(local_path, 'log')
+log_path = os.path.join(local_path, '../log')
 
 
 def args():
-    parser = argparse.ArgumentParser("Hyperparameters Setting for RHERTD3")
+    parser = argparse.ArgumentParser("Hyperparameters Setting for DDPG")
     parser.add_argument("--env_name", type=str, default="FetchPush-v2", help="env name")
-    parser.add_argument("--algo_name", type=str, default="RHERTD3", help="algorithm name")
+    parser.add_argument("--algo_name", type=str, default="HERDDPG", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
-    parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
+    parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
     # Training Params
-    parser.add_argument("--max_train_steps", type=int, default=int(1e7), help=" Maximum number of training steps")
-    parser.add_argument("--evaluate_freq", type=float, default=2e3,
+    parser.add_argument("--max_train_steps", type=int, default=int(3e5), help=" Maximum number of training steps")
+    parser.add_argument("--evaluate_freq", type=float, default=5e3,
                         help="Evaluate the policy every 'evaluate_freq' steps")
-    parser.add_argument("--save_freq", type=int, default=5, help="Save frequency")
+    parser.add_argument("--save_freq", type=int, default=10, help="Save frequency")
     parser.add_argument("--buffer_size", type=int, default=int(1e6), help="Reply buffer size")
     parser.add_argument("--batch_size", type=int, default=256, help="Minibatch size")
     # Net Params
@@ -35,10 +35,8 @@ def args():
     parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick: state normalization")
     parser.add_argument("--random_steps", type=int, default=1e3,
                         help="Take the random actions in the beginning for the better exploration")
-    parser.add_argument("--update_freq", type=int, default=40, help="Take 50 steps,then update the networks 50 times")
+    parser.add_argument("--update_freq", type=int, default=50, help="Take 50 steps,then update the networks 50 times")
     parser.add_argument("--k_future", type=int, default=4, help="Her k future")
-    parser.add_argument("--sigma", type=int, default=0.2, help="The std of Gaussian noise for exploration")
-    parser.add_argument("--k_update", type=bool, default=2, help="Delayed policy update frequence")
 
     return parser.parse_args()
 
@@ -46,7 +44,7 @@ def args():
 class HERDDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = RHERTD3(env, args)
+        self.agent = HERDDPG(env, args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.load_weights()
 

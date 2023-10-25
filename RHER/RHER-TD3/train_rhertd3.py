@@ -3,7 +3,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from RHER.RHERDDPG import HERDDPG
 from RHER.RHERTD3 import RHERTD3
 from utils.ModelBase import ModelBase
 import argparse
@@ -13,7 +12,7 @@ import gymnasium as gym
 from utils.replay_buffer import Trajectory
 
 local_path = os.path.dirname(__file__)
-log_path = os.path.join(local_path, 'log')
+log_path = os.path.join(local_path, '../log')
 
 
 def args():

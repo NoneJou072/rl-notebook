@@ -6,24 +6,22 @@
 ---
 单智能体强化学习算法：  
 
-| 算法                                              | Policy     | Based        |
-|-------------------------------------------------|------------|--------------|
-| 👉 [Sarsa](Sarsa/Sarsa.md)                      | on-policy  | value-based  |
-| 👉 [Q-Learning](Q-learning/Q_learning.md)       | off-policy | value-based  |
-| 👉 [DQN](DQN/DQN.md)                            | off-policy | value-based  |
-| ❌  [Rainbow-DQN]()                              | off-policy | value-based  |
-| 👉 [REINFORCE](REINFORCE/REINFORCE.md)          | on-policy  | policy-based |
-| 👉 [actor-critic](actor-critic/actor-critic.md) | on-policy  | policy-based |
-| 👉 [A2C](A2C/A2C.md)                            | on-policy  | Actor-Critic |
-| 👉 [DDPG](DDPG/DDPG.md)                        | off-policy | Actor-Critic |
-| 👉 [HER-DDPG](HER/HER.md)                     | off-policy | Actor-Critic |
-| 👉 [TD3](TD3/TD3.md)                            | off-policy | Actor-Critic |
-| ❌  [TRPO]()                                     | on-policy  | Actor-Critic |
-| 👉 [PPO-Continuous](PPO/PPO.md)                 | on-policy  | Actor-Critic |
-| 👉 [SAC](SAC/SAC.md)                            | off-policy | Actor-Critic |
----
-多智能体强化学习算法：  
-Coming soon
+| 算法                                              |    Policy    |     Based      |
+|-------------------------------------------------|:------------:|:--------------:|
+| 👉 [Sarsa](Sarsa/Sarsa.md)                      |  on-policy   |  value-based   |
+| 👉 [Q-Learning](Q-learning/Q_learning.md)       |  off-policy  |  value-based   |
+| 👉 [DQN](DQN/DQN.md)                            |  off-policy  |  value-based   |
+| ❌  [Rainbow-DQN]()                              |  off-policy  |  value-based   |
+| 👉 [REINFORCE](REINFORCE/REINFORCE.md)          |  on-policy   |  policy-based  |
+| 👉 [actor-critic](actor-critic/actor-critic.md) |  on-policy   |  policy-based  |
+| 👉 [A2C](A2C/A2C.md)                            |  on-policy   |  Actor-Critic  |
+| 👉 [DDPG](DDPG/DDPG.md)                         |  off-policy  |  Actor-Critic  |
+| 👉 [HER-DDPG](HER/HER.md)                       |  off-policy  |  Actor-Critic  |
+| 👉 [TD3](TD3/TD3.md)                            |  off-policy  |  Actor-Critic  |
+| ❌  [TRPO]()                                     |  on-policy   |  Actor-Critic  |
+| 👉 [PPO-Continuous](PPO/PPO.md)                 |  on-policy   |  Actor-Critic  |
+| 👉 [SAC](SAC/SAC.md)                            |  off-policy  |  Actor-Critic  |
+| 👉 [RHER-DDPG/TD3](https://github.com/kaixindelele/RHER)                  |  off-policy  |  Actor-Critic  |
 
 ---
 运行示例
@@ -44,10 +42,10 @@ mujoco(optional for HER-DDPG)
 tensorboard --logdir .
 ```
 
-参考文献
+参考
 ---
 * [OpenAI-Spinningup](https://spinningup.openai.com/en/latest/algorithms/sac.html)
 * [Easy-RL (蘑菇书)]()
-* 深度强化学习-王树森等
+* 深度强化学习-王树森
 * [Github:Lizhi-sjtu/DRL-code-pytorch](https://github.com/Lizhi-sjtu/DRL-code-pytorch/blob/main/2.Actor-Critic/README.md)  
 * [动手学强化学习](https://hrl.boyuai.com/chapter/2/dqn%E7%AE%97%E6%B3%95)
