@@ -1,24 +1,25 @@
 import os
+import argparse
 from copy import deepcopy
 import numpy as np
 import torch
-
-from RHERDDPG import HERDDPG
-from utils.ModelBase import ModelBase
-import argparse
 from torch.utils.tensorboard import SummaryWriter
-import gymnasium as gym
 
+from RHERTD3_pal import RHERTD3
+from utils.ModelBase import ModelBase
 from utils.replay_buffer import Trajectory
 
+from robopal.demos.demo_pick_place import PickAndPlaceEnv
+from robopal.commons.gym_wrapper import GoalEnvWrapper as GymWrapper
+
 local_path = os.path.dirname(__file__)
-log_path = os.path.join(local_path, '../log')
+log_path = os.path.join(local_path, './log')
 
 
 def args():
-    parser = argparse.ArgumentParser("Hyperparameters Setting for RHERDDPG")
+    parser = argparse.ArgumentParser("Hyperparameters Setting for RHERTD3")
     parser.add_argument("--env_name", type=str, default="FetchPush-v2", help="env name")
-    parser.add_argument("--algo_name", type=str, default="RHERDDPG", help="algorithm name")
+    parser.add_argument("--algo_name", type=str, default="RHERTD3", help="algorithm name")
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
     # Training Params
@@ -40,6 +41,7 @@ def args():
     parser.add_argument("--update_freq", type=int, default=40, help="Take 50 steps,then update the networks 50 times")
     parser.add_argument("--k_future", type=int, default=4, help="Her k future")
     parser.add_argument("--sigma", type=int, default=0.2, help="The std of Gaussian noise for exploration")
+    parser.add_argument("--k_update", type=bool, default=2, help="Delayed policy update frequence")
 
     return parser.parse_args()
 
@@ -47,7 +49,7 @@ def args():
 class HERDDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
-        self.agent = HERDDPG(env, args)
+        self.agent = RHERTD3(env, args)
         self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
@@ -85,10 +87,10 @@ class HERDDPGModel(ModelBase):
             # 将轨迹分割成子任务1和子任务2的，其中，子任务2使用完整的轨迹
             traj_reach = Trajectory()
             for trans in traj.buffer:
+                traj_reach.push(trans)
                 reached = self.agent.check_reached(trans[2][:3], trans[6])
                 if reached:
                     break
-                traj_reach.push(trans)
             self.agent.memory.push(traj)
             self.agent.memory_reach.push(traj_reach)
 
@@ -151,7 +153,7 @@ class HERDDPGModel(ModelBase):
                 ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
                 action = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
                 obs, r, terminated, truncated, _ = self.env_evaluate.step(action)
-                r = self.env.unwrapped.compute_reward(obs['observation'][:3], obs['achieved_goal'], None)
+                r = self.env.compute_reward(obs['observation'][:3], obs['achieved_goal'], None)
                 episode_reward += r
                 if truncated:
                     break
@@ -162,7 +164,8 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    env = gym.make(args.env_name, render_mode=None)  # 创建环境
+    env = PickAndPlaceEnv(is_render=True)
+    env = GymWrapper(env)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
@@ -170,13 +173,13 @@ def make_env(args):
     max_action = float(env.action_space.high[0])
     min_action = float(env.action_space.low[0])
 
-    print(f"state dim:{state_dim}, action dim:{action_dim}, max_epi_steps:{env._max_episode_steps}")
+    print(f"state dim:{state_dim}, action dim:{action_dim}, max_epi_steps:{env.max_episode_steps}")
     print(f"max action:{max_action}, min action:{min_action}")
 
     setattr(args, 'state_dim', state_dim)
     setattr(args, 'action_dim', action_dim)
     setattr(args, 'goal_dim', goal_dim)
-    setattr(args, 'max_episode_steps', env._max_episode_steps)
+    setattr(args, 'max_episode_steps', env.max_episode_steps)
     setattr(args, 'max_action', max_action)
 
     return env

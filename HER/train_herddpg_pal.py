@@ -129,17 +129,7 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    from robopal.assets.robots.diana_med import DianaGrasp
-
-    env = PickAndPlaceEnv(
-        robot=DianaGrasp(),
-        renderer="viewer",
-        is_render=False,
-        control_freq=10,
-        is_interpolate=False,
-        is_pd=False,
-        jnt_controller='JNTIMP',
-    )
+    env = PickAndPlaceEnv(is_render=False)
     env = GymWrapper(env)
     env_checker.check_env(env, skip_render_check=True)
 

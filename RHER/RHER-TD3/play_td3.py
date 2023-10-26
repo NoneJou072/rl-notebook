@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from utils.ModelBase import ModelBase
 
-from RHER.RHERTD3 import RHERTD3
+from RHERTD3 import RHERTD3
 import argparse
 import gymnasium as gym
 

@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from RHER.RHERTD3 import RHERTD3
+from RHERTD3 import RHERTD3
 from utils.ModelBase import ModelBase
 import argparse
 from torch.utils.tensorboard import SummaryWriter

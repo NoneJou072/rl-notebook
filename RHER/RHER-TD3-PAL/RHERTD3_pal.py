@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from RHER.rher_buffer import HERReplayBuffer
+from rher_buffer_pal import RHERReplayBuffer
 
 
 class Actor(nn.Module):
@@ -70,8 +70,8 @@ class RHERTD3:
         self.training_times = 0
 
         self.batch_size = args.batch_size
-        self.memory = HERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
-        self.memory_reach = HERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
+        self.memory = RHERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
+        self.memory_reach = RHERReplayBuffer(capacity=args.buffer_size, k_future=args.k_future, env=env)
 
         self.state_dim = args.state_dim
         self.goal_dim = args.goal_dim

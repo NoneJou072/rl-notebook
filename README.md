@@ -28,10 +28,10 @@
 ---
 
 > 运行环境：  
-python(in Pycharm)- 3.9.13  
+python(in Pycharm)- 3.10  
 gymnasium-0.28.1  
 numpy-1.24.3  
-torch-1.12.0  
+torch-2.1.0  
 --  
 mujoco(optional for HER-DDPG)
 
