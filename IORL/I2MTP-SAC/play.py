@@ -20,7 +20,7 @@ def args():
     parser.add_argument("--seed", type=int, default=10, help="random seed")
     parser.add_argument("--device", type=str, default='cuda:0', help="pytorch device")
     # Training Params
-    parser.add_argument("--max_train_steps", type=int, default=int(1e7), help=" Maximum number of training steps")
+    parser.add_argument("--max_train_steps", type=int, default=int(2e6), help=" Maximum number of training steps")
     parser.add_argument("--evaluate_freq", type=float, default=2e3,
                         help="Evaluate the policy every 'evaluate_freq' steps")
     parser.add_argument("--save_freq", type=int, default=5, help="Save frequency")
@@ -47,7 +47,7 @@ class HERDDPGModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
         self.agent = IORL(env, args)
-        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{2}_seed_{self.args.seed}'
         self.load_weights()
 
     def load_weights(self):
@@ -58,28 +58,27 @@ class HERDDPGModel(ModelBase):
 
     def play(self):
         self.env.env.TASK_FLAG = 0
-        obs, _ = self.env.reset()
-        while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
-            obs, _ = self.env.reset()
+        obs, info = self.env.reset()
         for _ in range(self.args.max_train_steps):
             obs['desired_goal'][:3] *= 0
-            obs['desired_goal'][6:] *= 0
-            # obs['desired_goal'][3:] *= 0
+            if info['is_drawer_success'] == 0.0:
+                obs['desired_goal'][3:6] *= 0
+            else:
+                obs['desired_goal'][6:9] *= 0
+            # obs['desired_goal'][6:] *= 0
 
             s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
             g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
-            a = self.agent.actor(s, g).data.cpu().numpy().flatten()
-            # a = self.agent.sample_action(obs, deterministic=True)  # 选择动作
-
-            obs, r, terminated, truncated, info = self.env.step(a)  # 更新环境，返回transition
+            a, _ = self.agent.actor(s, g, deterministic=True)
+            a = a.detach().cpu().numpy().flatten()
+            # a = self.agent.sample_action(obs, deterministic=True)
+            obs, r, terminated, truncated, info = self.env.step(a)
 
             time.sleep(0.01)
             if truncated:
                 success = info['is_drawer_success']
-                print(success)
+                # print(success)
                 obs, _ = self.env.reset()
-                while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
-                    obs, _ = self.env.reset()
 
         self.env.close()
 

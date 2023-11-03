@@ -115,7 +115,7 @@ class IORL:
 
         last_obs = copy.deepcopy(s)
 
-        reached = self.check_reached(last_obs['achieved_goal'][:3], last_obs['desired_goal'][:3])
+        reached = self.check_reached(last_obs['achieved_goal'][:3], last_obs['desired_goal'][:3], th=0.02 if task=='drawer' else 0.05)
 
         if not deterministic:
             # 在 reach 阶段，有 40%的概率采用 reach 策略, 20% 概率采用随机策略，40% 概率采用 push 策略。

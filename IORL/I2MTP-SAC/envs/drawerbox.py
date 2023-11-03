@@ -17,8 +17,6 @@ class DrawerBox(DrawerCubeEnv):
 
         self.max_episode_steps = 50
 
-        self.TASK_FLAG = 0
-
     def _get_obs(self) -> dict:
         """ The observation space is 16-dimensional, with the first 3 dimensions corresponding to the position
         of the block, the next 3 dimensions corresponding to the position of the goal, the next 3 dimensions

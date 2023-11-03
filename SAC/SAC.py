@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 from utils.replay_buffer import ReplayBuffer
-from utils.ContinuesBase import ContinuesBase
 import copy
 import numpy as np
 
@@ -71,7 +70,7 @@ class Critic(nn.Module):
         return q1, q2
 
 
-class SAC(ContinuesBase):
+class SAC:
     """
     reference: https://hrl.boyuai.com/chapter/2/sac%E7%AE%97%E6%B3%95/#144-sac
     """
@@ -108,7 +107,7 @@ class SAC(ContinuesBase):
         return a.detach().numpy().flatten()
 
     def update(self):
-        s, a, s_, r, terminated, done = self.memory.sample(self.batch_size, with_log=False)
+        s, a, s_, r, terminated, _ = self.memory.sample(self.batch_size, with_log=False)
 
         with torch.no_grad():
             # compute target Q value

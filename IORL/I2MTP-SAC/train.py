@@ -36,7 +36,7 @@ def args():
     parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick: state normalization")
     parser.add_argument("--random_steps", type=int, default=1e3,
                         help="Take the random actions in the beginning for the better exploration")
-    parser.add_argument("--update_freq", type=int, default=40, help="Take 50 steps,then update the networks 50 times")
+    parser.add_argument("--update_freq", type=int, default=80, help="Take 50 steps,then update the networks 50 times")
     parser.add_argument("--k_future", type=int, default=4, help="Her k future")
     parser.add_argument("--sigma", type=int, default=0.2, help="The std of Gaussian noise for exploration")
     parser.add_argument("--k_update", type=bool, default=2, help="Delayed policy update frequence")
@@ -48,7 +48,7 @@ class IORLModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
         self.agent = IORL(env, args)
-        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{2}_seed_{self.args.seed}'
         self.random_steps = args.random_steps
         self.update_freq = args.update_freq
         self.max_train_steps = args.max_train_steps
@@ -102,7 +102,7 @@ class IORLModel(ModelBase):
             traj_reach = Trajectory()
             for transition in traj_draw.buffer:
                 traj_reach.push(transition)
-                reached = self.agent.check_reached(transition[6][:3], transition[5][:3])
+                reached = self.agent.check_reached(transition[6][:3], transition[5][:3], th=0.02)
                 if reached:
                     break
             self.agent.memory_draw.push(traj_draw)
@@ -111,7 +111,7 @@ class IORLModel(ModelBase):
             traj_reach = Trajectory()
             for transition in traj_place.buffer:
                 traj_reach.push(transition)
-                reached = self.agent.check_reached(transition[6][:3], transition[5][:3])
+                reached = self.agent.check_reached(transition[6][:3], transition[5][:3], th=0.05)
                 if reached:
                     break
             self.agent.memory_place.push(traj_place)
@@ -125,17 +125,20 @@ class IORLModel(ModelBase):
             if total_steps >= self.random_steps and total_steps % self.args.evaluate_freq == 0:
                 evaluate_reward_drawer, evaluate_reward_place, success_rate_drawer, success_rate_place = self.evaluate_policy()
                 print(
-                    f"total_steps:{total_steps} \t evaluate_reward_draw:{evaluate_reward_drawer} \t \
-                    evaluate_reward_place:{evaluate_reward_place} \t success_rate_drawer:{success_rate_drawer}\t \
+                    f"total_steps:{total_steps} \t  success_rate_drawer:{success_rate_drawer}\t \
                     success_rate_place:{success_rate_place}"
                 )
-                writer.add_scalar('step_rewards_{}_drawer'.format(self.args.env_name), evaluate_reward_drawer,
+                writer.add_scalar('reward/step_rewards_{}_drawer'.format(self.args.env_name), evaluate_reward_drawer,
                                   global_step=total_steps)
-                writer.add_scalar('success_rate_{}_drawer'.format(self.args.env_name), success_rate_drawer,
+                writer.add_scalar('reward/step_rewards_{}_place'.format(self.args.env_name), evaluate_reward_place,
                                   global_step=total_steps)
-                writer.add_scalar('critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
+                writer.add_scalar('success_rate/success_rate_{}_drawer'.format(self.args.env_name), success_rate_drawer,
                                   global_step=total_steps)
-                writer.add_scalar('actor_loss_{}'.format(self.args.env_name), self.agent.actor_loss_record,
+                writer.add_scalar('success_rate/success_rate_{}_place'.format(self.args.env_name), success_rate_place,
+                                  global_step=total_steps)
+                writer.add_scalar('loss/critic_loss_{}'.format(self.args.env_name), self.agent.critic_loss_record,
+                                  global_step=total_steps)
+                writer.add_scalar('loss/actor_loss_{}'.format(self.args.env_name), self.agent.actor_loss_record,
                                   global_step=total_steps)
                 # Save Actor weights
                 model_dir = os.path.join(log_path, f'./data_train/{self.agent.agent_name}')
@@ -165,26 +168,6 @@ class IORLModel(ModelBase):
                     success_rate_drawer += info['is_drawer_success']
                     break
             evaluate_reward_drawer += episode_reward
-
-        # # evaluate drawer stage
-        # evaluate_reward_reach = 0
-        # for _ in range(times):
-        #     episode_reward = 0
-        #     obs, _ = self.env_evaluate.reset()
-        #     while np.linalg.norm(obs["achieved_goal"] - obs["desired_goal"]) <= 0.05:
-        #         obs, _ = self.env.reset()
-        #     while True:
-        #         obs['desired_goal'] *= 0
-        #         s = torch.unsqueeze(torch.tensor(obs['observation'], dtype=torch.float32), 0).to(self.agent.device)
-        #         g = torch.unsqueeze(torch.tensor(obs['desired_goal'], dtype=torch.float32), 0).to(self.agent.device)
-        #         ag = torch.unsqueeze(torch.tensor(obs['achieved_goal'], dtype=torch.float32), 0).to(self.agent.device)
-        #         action = self.agent.actor(s, g, ag).data.cpu().numpy().flatten()
-        #         obs, r, terminated, truncated, _ = self.env_evaluate.step(action)
-        #         r = self.env.compute_reward(obs['observation'][:3], obs['achieved_goal'], None)
-        #         episode_reward += r
-        #         if truncated:
-        #             break
-        #     evaluate_reward_reach += episode_reward
 
         # evaluate place stage
         self.env.env.TASK_FLAG = 1
