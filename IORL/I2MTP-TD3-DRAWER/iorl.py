@@ -3,7 +3,6 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
 from rher_buffer import RHERReplayBuffer
 
 
@@ -16,38 +15,15 @@ class Actor(nn.Module):
         self.fc3 = nn.Linear(hidden_dim, hidden_dim)
         self.fc4 = nn.Linear(hidden_dim, hidden_dim)
         self.fc5 = nn.Linear(hidden_dim, action_dim)
-        # We use 'nn.Parameter' to train log_std automatically
-        self.log_std = nn.Parameter(torch.zeros(1, action_dim))
 
-    def forward(self, s, g, deterministic=False):
+    def forward(self, s, g):
         s_g = torch.cat([s, g], 1)
         a = F.relu(self.fc1(s_g))
         a = F.relu(self.fc2(a))
         a = F.relu(self.fc3(a))
         a = F.relu(self.fc4(a))
-        # 将网络输出的 action 规范在 (-max_action， max_action) 之间
-        mean = self.fc5(a)
-        log_std = self.log_std.expand_as(mean)  # To make 'log_std' have the same dimension as 'mean'
-        std = torch.exp(log_std)  # The reason we train the 'log_std' is to ensure std=exp(log_std)>0
-
-        dist = Normal(mean, std)  # Get the Gaussian distribution
-        if deterministic:
-            a = mean
-        else:
-            a = dist.rsample()
-
-        log_pi = dist.log_prob(a).sum(dim=1, keepdim=True)
-
-        # The method refers to Open AI Spinning up, which is more stable.
-        log_pi -= (2 * (np.log(2) - a - F.softplus(-2 * a))).sum(dim=1, keepdim=True)
-        # The method refers to StableBaselines3
-        # log_pi -= torch.log(1 - a ** 2 + self.epsilon).sum(dim=1, keepdim=True)
-
-        # Compress the unbounded Gaussian distribution into a bounded action interval.
-        a = torch.clamp(a, -self.max_action, self.max_action)
-        # a = self.max_action * torch.tanh(a)
-
-        return a, log_pi
+        a = self.max_action * torch.tanh(self.fc5(a))
+        return a
 
 
 class Critic(nn.Module):
@@ -104,14 +80,9 @@ class IORL:
         self.hidden_dim = args.hidden_dim
         self.max_action = args.max_action
 
-        self.target_entropy = -self.action_dim
-        self.log_alpha = torch.zeros(1).to(self.device)
-        self.log_alpha.requires_grad=True
-        self.alpha = self.log_alpha.exp().to(self.device)
-        self.alpha_optimizer = torch.optim.Adam([self.log_alpha], args.lr)
-
         self.actor = Actor(self.state_dim, self.goal_dim, self.action_dim, self.hidden_dim, self.max_action).to(self.device)
         self.critic = Critic(self.state_dim, self.goal_dim, self.action_dim, self.hidden_dim).to(self.device)
+        self.actor_target = copy.deepcopy(self.actor)
         self.critic_target = copy.deepcopy(self.critic)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=args.lr)  # 优化器
@@ -119,6 +90,8 @@ class IORL:
 
         self.critic_loss_record = None
         self.actor_loss_record = None
+
+        self.enable_guide = False
 
     def check_reached(self, gg, ag, th=0.05):
         """ Check if the gripper has reached the goal position.
@@ -137,22 +110,15 @@ class IORL:
         return reached
 
     def sample_action(self, s, task, deterministic=False):
-        # Here is the part of RHER
-        # Trick: SGES 探索策略
-        rd = 0.2  # 随机策略选择概率。表示在 reach 阶段， 有 20% 的概率采用随机策略
-        rr = 0.4 / (1.0 - rd)  # 0.4 is 自引导率。表示在 reach 阶段，有 40% 的概率采用 reach 模式。
 
         last_obs = copy.deepcopy(s)
-
-        reached = self.check_reached(last_obs['achieved_goal'][:3], last_obs['desired_goal'][:3], th=0.02 if task=='drawer' else 0.05)
+        reached = self.check_reached(last_obs['achieved_goal'][:3], last_obs['desired_goal'][:3], th=0.02 if task=='drawer' else 0.02)
 
         if not deterministic:
-            # 在 reach 阶段，有 40%的概率采用 reach 策略, 20% 概率采用随机策略，40% 概率采用 push 策略。
-            if np.random.random() < rr and not reached:
-                reach_a = True  # reach 模式标志位
-                last_obs['desired_goal'][3:] *= 0  # Trick：零填充(zero-padding)编码, 用于区分任务
-            # 在 push 阶段，有 20%的概率采用随机策略，80% 概率采用 push 策略。
+            if not reached and self.enable_guide:
+                last_obs['desired_goal'][3:] *= 0
             else:
+                self.enable_guide = False
                 last_obs['desired_goal'][:3] *= 0
                 if task == 'drawer':
                     last_obs['desired_goal'][6:] *= 0
@@ -168,20 +134,24 @@ class IORL:
         with torch.no_grad():
             s = torch.unsqueeze(torch.tensor(last_obs['observation'], dtype=torch.float32), 0).to(self.device)
             g = torch.unsqueeze(torch.tensor(last_obs['desired_goal'], dtype=torch.float32), 0).to(self.device)
-            a, _ = self.actor.forward(s, g, deterministic)
-            return a.detach().cpu().numpy().flatten()
+            a = self.actor(s, g).data.cpu().numpy().flatten()
+            if not deterministic:
+                a += self.sigma * np.random.randn(self.action_dim)  # gaussian noise
+                a = np.clip(a, -self.max_action, self.max_action)
+            return a
 
     def update(self):
         self.training_times += 1
-        batch_s_3, batch_a_3, batch_s_3_, batch_r_3, batch_g_3 = self.memory_place.sample(self.batch_size,
-                                                                                         device=self.device,
-                                                                                         task='place')
-        batch_s_2, batch_a_2, batch_s_2_, batch_r_2, batch_g_2 = self.memory_draw.sample(self.batch_size,
-                                                                                         device=self.device,
-                                                                                         task='drawer')
         batch_s_1, batch_a_1, batch_s_1_, batch_r_1, batch_g_1 = self.memory_reach.sample(self.batch_size,
                                                                                           device=self.device,
                                                                                           task='reach')
+        batch_s_2, batch_a_2, batch_s_2_, batch_r_2, batch_g_2 = self.memory_draw.sample(self.batch_size,
+                                                                                         device=self.device,
+                                                                                         task='drawer')
+        batch_s_3, batch_a_3, batch_s_3_, batch_r_3, batch_g_3 = self.memory_place.sample(self.batch_size,
+                                                                                         device=self.device,
+                                                                                         task='place')
+
         batch_s = torch.concatenate((batch_s_1, batch_s_2, batch_s_3))
         batch_a = torch.concatenate((batch_a_1, batch_a_2, batch_a_3))
         batch_s_ = torch.concatenate((batch_s_1_, batch_s_2_, batch_s_3_))
@@ -190,10 +160,9 @@ class IORL:
 
         q_currents1, q_currents2 = self.critic(batch_s, batch_g, batch_a)
         with torch.no_grad():  # target_Q has no gradient
-            # Clipped dobule Q-learning, compute target Q value
-            a_, log_pi_ = self.actor(batch_s_, batch_g)
-            q_next1, q_next2 = self.critic_target(batch_s_, batch_g, a_)
-            q_targets = batch_r + self.gamma * torch.min(q_next1, q_next2) - self.alpha * log_pi_
+            # Clipped dobule Q-learning
+            q_next1, q_next2 = self.critic_target(batch_s_, batch_g, self.actor_target(batch_s_, batch_g))
+            q_targets = batch_r + self.gamma * torch.min(q_next1, q_next2)
 
         critic_loss = F.mse_loss(q_currents1, q_targets) + F.mse_loss(q_currents2, q_targets)
         self.critic_loss_record = critic_loss.item()
@@ -202,32 +171,26 @@ class IORL:
         self.critic_optimizer.step()
 
         # Delayed policy updates
-        for params in self.critic.parameters():
-            params.requires_grad = False
+        if self.training_times % self.k_update == 0:
+            # Freeze critic networks so you don't waste computational effort
+            for params in self.critic.parameters():
+                params.requires_grad = False
 
-        a, log_pi = self.actor(batch_s, batch_g)
-        q_currents1, q_currents2 = self.critic(batch_s, batch_g, a)
-        actor_loss = (self.alpha * log_pi - torch.min(q_currents1, q_currents2)).mean()
-        self.actor_loss_record = actor_loss.item()
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
+            q_currents1, q_currents2 = self.critic(batch_s, batch_g, self.actor(batch_s, batch_g))
+            actor_loss = -torch.min(q_currents1, q_currents2).mean()
+            self.actor_loss_record = actor_loss.item()
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
 
-        # Unfreeze critic networks
-        for params in self.critic.parameters():
-            params.requires_grad = True
-
-        # Compute temperature loss
-        # We learn log_alpha instead of alpha to ensure that alpha=exp(log_alpha)>0
-        # https://github.com/rail-berkeley/softlearning/issues/37
-        alpha_loss = -(self.log_alpha.exp() * (log_pi + self.target_entropy).detach()).mean()
-        self.alpha_optimizer.zero_grad()
-        alpha_loss.backward()
-        self.alpha_optimizer.step()
-        # Update alpha
-        self.alpha = self.log_alpha.exp()
+            # Unfreeze critic networks
+            for params in self.critic.parameters():
+                params.requires_grad = True
 
     def update_target_net(self):
         # soft update target net
         for params, target_params in zip(self.critic.parameters(), self.critic_target.parameters()):
+            target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)
+
+        for params, target_params in zip(self.actor.parameters(), self.actor_target.parameters()):
             target_params.data.copy_(self.tau * params.data + (1 - self.tau) * target_params.data)

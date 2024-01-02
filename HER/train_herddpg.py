@@ -138,7 +138,7 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    env = gym.make(args.env_name, render_mode=None)  # 创建环境
+    env = gym.make(args.env_name, render_mode='human')  # 创建环境
     # env_checker.check_env(env)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]
