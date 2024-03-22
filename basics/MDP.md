@@ -16,7 +16,7 @@ $G(t)=r_{t+1}+\gamma r_{t+2}+\gamma^2r_{t+3}+\dots+\gamma^{T-t-1}r_T$
 
 $V^t(s)=\mathbb{E} \left [G_t \mid s_t=s \right ] \\=\mathbb{E} \left [r_{t+1}+\gamma r_{t+2}+\gamma^2r_{t+3}+\dots+\gamma^{T-t-1}r_T \mid s_t=s \right ] \\=\mathbb{E} \left [r_{t+1}+\gamma V^{t+1}(s_{t+1})  \mid s_t=s \right ]$
 
-# 1.**贝尔曼**方程
+# 1.贝尔曼方程
 
 对于上面提到的状态价值函数，等价于
 
