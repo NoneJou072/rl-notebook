@@ -22,6 +22,7 @@
 | 👉 [PPO-Continuous](PPO/PPO.md)                 |  on-policy   |  Actor-Critic  |
 | 👉 [SAC](SAC/SAC.md)                            |  off-policy  |  Actor-Critic  |
 | 👉 [RHER-DDPG/TD3](https://github.com/kaixindelele/RHER)                  |  off-policy  |  Actor-Critic  |
+| 👉 [Behavior Cloning(BC)]()                  |  off-policy  |  Imitation Learning  |
 
 ---
 运行示例

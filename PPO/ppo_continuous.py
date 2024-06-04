@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from utils.replay_buffer import ReplayBuffer
-from utils.ContinuesBase import ContinuesBase
+from utils.ModelBase import ModelBase
 
 
 class Actor(nn.Module):
@@ -54,7 +54,7 @@ class Critic(nn.Module):
         return v_s
 
 
-class PPO_continuous(ContinuesBase):
+class PPO_continuous(ModelBase):
     def __init__(self, args) -> None:
         super().__init__(args)
         self.device = torch.device(args.device)

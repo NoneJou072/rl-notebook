@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 from copy import deepcopy
 import shutil
@@ -8,9 +10,8 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 from utils.replay_buffer import Trajectory
 
-from robopal.demos.demo_pick_place import PickAndPlaceEnv
-from robopal.commons.gym_wrapper import GoalEnvWrapper as GymWrapper
-from gymnasium.utils import env_checker
+import robopal
+from robopal.wrappers import GoalEnvWrapper
 
 
 local_path = os.path.dirname(__file__)
@@ -129,9 +130,13 @@ class HERDDPGModel(ModelBase):
 
 def make_env(args):
     """ 配置环境 """
-    env = PickAndPlaceEnv(is_render=False)
-    env = GymWrapper(env)
-    env_checker.check_env(env, skip_render_check=True)
+    env = robopal.make(
+        "PickAndPlace-v1",
+        render_mode=None,
+        is_randomize_end=False,
+        is_randomize_object=False,
+    )
+    env = GoalEnvWrapper(env)
 
     state_dim = env.observation_space.spaces["observation"].shape[0]
     action_dim = env.action_space.shape[0]
