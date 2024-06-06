@@ -8,11 +8,12 @@ from copy import deepcopy as dc
 class ReplayBuffer:
     """ 经验回放池, 用于存储transition, 然后随机采样transition用于训练 """
 
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, capacity: int, device) -> None:
         """ 初始化经验回放池
 
             :param capacity: (int) 经验回放池的容量
         """
+        self.device = device
         self.capacity = capacity
         self.buffer = deque(maxlen=self.capacity)
 
@@ -47,14 +48,14 @@ class ReplayBuffer:
         else:
             s, a, s_, r, dw, done = zip(*batch)
 
-        s = torch.tensor(np.asarray(s), dtype=torch.float)
-        a = torch.tensor(np.asarray(a), dtype=torch.float)
+        s = torch.tensor(np.asarray(s), dtype=torch.float, device=self.device)
+        a = torch.tensor(np.asarray(a), dtype=torch.float, device=self.device)
         if with_log:
-            a_logprob = torch.tensor(np.asarray(a_logprob), dtype=torch.float)
-        s_ = torch.tensor(np.asarray(s_), dtype=torch.float)
-        r = torch.tensor(np.asarray(r), dtype=torch.float).view(batch_size, 1)
-        dw = torch.tensor(np.asarray(dw), dtype=torch.float).view(batch_size, 1)
-        done = torch.tensor(np.asarray(done), dtype=torch.float).view(batch_size, 1)
+            a_logprob = torch.tensor(np.asarray(a_logprob), dtype=torch.float, device=self.device)
+        s_ = torch.tensor(np.asarray(s_), dtype=torch.float, device=self.device)
+        r = torch.tensor(np.asarray(r), dtype=torch.float, device=self.device).view(batch_size, 1)
+        dw = torch.tensor(np.asarray(dw), dtype=torch.float, device=self.device).view(batch_size, 1)
+        done = torch.tensor(np.asarray(done), dtype=torch.float, device=self.device).view(batch_size, 1)
         if with_log:
             return s, a, a_logprob, s_, r, dw, done
         else:

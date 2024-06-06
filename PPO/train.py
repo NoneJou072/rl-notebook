@@ -1,9 +1,11 @@
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
-import torch
 from ppo_continuous import PPO_continuous
 from utils.ModelBase import ModelBase
 import argparse
+import torch
 from torch.utils.tensorboard import SummaryWriter
 from utils.normalization import Normalization
 import gymnasium as gym
@@ -11,52 +13,50 @@ import gymnasium as gym
 local_path = os.path.dirname(__file__)
 log_path = os.path.join(local_path, 'log')
 
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
-class Config:
-    def __call__(self, *args, **kwargs):
-        # Env Params
-        parser = argparse.ArgumentParser("Hyperparameters Setting for PPO-continuous")
-        parser.add_argument("--env_name", type=str, default="Walker2d-v2", help="env name")
-        parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
-        parser.add_argument("--seed", type=int, default=10, help="random seed")
-        parser.add_argument("--device", type=str, default='cpu', help="pytorch device")
-        # Training Params
-        parser.add_argument("--max_train_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
-        parser.add_argument("--max_episode_steps", type=int, default=int(1e3), help=" Maximum number of training steps")
-        parser.add_argument("--test_eps", type=int, default=20, help=" Maximum number of training steps")
-        parser.add_argument("--evaluate_freq", type=float, default=5e3,
-                            help="Evaluate the policy every 'evaluate_freq' steps")
-        parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
-        parser.add_argument("--update_freq", type=int, default=2048, help="Update frequency")
-        parser.add_argument("--buffer_size", type=int, default=2048, help="Reply buffer size")
-        parser.add_argument("--mini_batch_size", type=int, default=64, help="Minibatch size")
-        # Net Params
-        parser.add_argument("--hidden_dim", type=int, default=64,
-                            help="The number of neurons in hidden layers of the neural network")
-        parser.add_argument("--actor_lr", type=float, default=3e-4, help="Learning rate of actor")
-        parser.add_argument("--critic_lr", type=float, default=3e-4, help="Learning rate of critic")
-        parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
-        parser.add_argument("--gae_lambda", type=float, default=0.95, help="GAE parameter")
-        parser.add_argument("--eps_clip", type=float, default=0.2, help="PPO clip parameter-epsilon-clip")
-        parser.add_argument("--k_epochs", type=int, default=10, help="PPO parameter, 更新策略网络的次数")
-        parser.add_argument("--entropy_coef", type=float, default=0.01, help="policy entropy")
+# Env Params
+parser = argparse.ArgumentParser("Hyperparameters Setting for PPO-continuous")
+parser.add_argument("--env_name", type=str, default="Walker2d-v4", help="env name")
+parser.add_argument("--algo_name", type=str, default="PPO-continuous", help="algorithm name")
+parser.add_argument("--seed", type=int, default=10, help="random seed")
+parser.add_argument("--device", type=str, default=device, help="pytorch device")
+# Training Params
+parser.add_argument("--max_train_steps", type=int, default=int(3e6), help=" Maximum number of training steps")
+parser.add_argument("--max_episode_steps", type=int, default=int(1e3), help=" Maximum number of training steps")
+parser.add_argument("--test_eps", type=int, default=20, help=" Maximum number of training steps")
+parser.add_argument("--evaluate_freq", type=float, default=5e3,
+                    help="Evaluate the policy every 'evaluate_freq' steps")
+parser.add_argument("--save_freq", type=int, default=20, help="Save frequency")
+parser.add_argument("--update_freq", type=int, default=512, help="Update frequency")
+parser.add_argument("--buffer_size", type=int, default=2048, help="Reply buffer size")
+parser.add_argument("--mini_batch_size", type=int, default=32, help="Minibatch size")
+# Net Params
+parser.add_argument("--hidden_dim", type=int, default=64,
+                    help="The number of neurons in hidden layers of the neural network")
+parser.add_argument("--lr", type=float, default=5e-5, help="Learning rate")
+parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
+parser.add_argument("--gae_lambda", type=float, default=0.95, help="GAE parameter")
+parser.add_argument("--eps_clip", type=float, default=0.2, help="PPO clip parameter-epsilon-clip")
+parser.add_argument("--k_epochs", type=int, default=10, help="PPO parameter, 更新策略网络的次数")
+parser.add_argument("--entropy_coef", type=float, default=0.001, help="policy entropy")
 
-        # Optim tricks， reference by https://zhuanlan.zhihu.com/p/512327050
-        parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick 2:state normalization")
-        parser.add_argument("--use_reward_scaling", type=bool, default=True, help="Trick 4:reward scaling")
-        parser.add_argument("--use_lr_decay", type=bool, default=True, help="Trick 6:learning rate Decay")
-        parser.add_argument("--use_orthogonal_init", type=bool, default=True, help="Trick 8: orthogonal initialization")
-        parser.add_argument("--set_adam_eps", type=float, default=True, help="Trick 9: set Adam epsilon=1e-5")
-        parser.add_argument("--use_tanh", type=float, default=True, help="Trick 10: tanh activation function")
+# Optim tricks， reference by https://zhuanlan.zhihu.com/p/512327050
+parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick 2:state normalization")
+parser.add_argument("--use_reward_scaling", type=bool, default=True, help="Trick 4:reward scaling")
+parser.add_argument("--use_lr_decay", type=bool, default=True, help="Trick 6:learning rate Decay")
+parser.add_argument("--use_orthogonal_init", type=bool, default=True, help="Trick 8: orthogonal initialization")
+parser.add_argument("--set_adam_eps", type=float, default=True, help="Trick 9: set Adam epsilon=1e-5")
+parser.add_argument("--use_tanh", type=float, default=True, help="Trick 10: tanh activation function")
 
-        return parser.parse_args()
+args = parser.parse_args()
 
 
 class PPOContinuousModel(ModelBase):
     def __init__(self, env, args):
         super().__init__(env, args)
         self.agent = PPO_continuous(args)
-        self.model_name = f'{self.agent.agent_name}_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
+        self.model_name = f'PPO_{self.args.env_name}_num_{1}_seed_{self.args.seed}'
         if self.args.use_state_norm:
             self.state_norm = Normalization(shape=self.args.n_states)  # Trick 2:state normalization
 
@@ -103,7 +103,7 @@ class PPOContinuousModel(ModelBase):
                                       global_step=total_steps)
                     # Save the rewards
                     if evaluate_num % self.args.save_freq == 0:
-                        model_dir = os.path.join(log_path, f'./data_train/{self.agent.agent_name}')
+                        model_dir = os.path.join(log_path, f'./data_train/PPO')
                         if not os.path.exists(model_dir):
                             os.makedirs(model_dir)
                         np.save(os.path.join(model_dir, f'{self.model_name}.npy'), np.array(evaluate_rewards))
@@ -131,7 +131,7 @@ def make_env(args):
 
 
 if __name__ == '__main__':
-    args = Config().__call__()
+
     env = make_env(args)
     model = PPOContinuousModel(
         env=env,
