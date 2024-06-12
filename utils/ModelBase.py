@@ -26,26 +26,30 @@ class ModelBase(object):
         self.state_norm = None
 
     def evaluate_policy(self):
-        times = 3
+        times = 5
         evaluate_reward = 0
+        evaluate_episode_len = 0
         for _ in range(times):
             s, _ = self.env_evaluate.reset(seed=self.args.seed)
             if self.args.use_state_norm:
                 s = self.state_norm(s, update=False)  # During the evaluating,update=False
             episode_reward = 0
+            episode_len = 0
             while True:
                 # We use the deterministic policy during the evaluating
                 action = self.agent.sample_action(s, deterministic=True)
                 s_, r, terminated, truncated, _ = self.env_evaluate.step(action)
                 if self.args.use_state_norm:
                     s_ = self.state_norm(s_, update=False)
-                episode_reward += r
                 s = s_
+                episode_reward += r
+                episode_len += 1
                 if terminated or truncated:
                     break
             evaluate_reward += episode_reward
+            evaluate_episode_len += episode_len
 
-        return evaluate_reward / times
+        return evaluate_reward / times, evaluate_episode_len / times
 
     def set_seed(self, seed=10):
         """ 配置seed """
@@ -65,7 +69,6 @@ class ModelBase(object):
         total_steps = 0
         evaluate_num = 0
         sample_count = 0
-        evaluate_rewards = []  # 记录每回合的奖励
 
         # Tensorboard config
         log_dir = os.path.join(log_path, f'./runs/{self.model_name}')
@@ -94,15 +97,16 @@ class ModelBase(object):
 
                 if total_steps % self.args.evaluate_freq == 0:
                     evaluate_num += 1
-                    evaluate_reward = self.evaluate_policy()
-                    evaluate_rewards.append(evaluate_reward)
-                    print("evaluate_num:{} \t evaluate_reward:{} \t".format(evaluate_num, evaluate_reward))
-                    writer.add_scalar('step_rewards_{}'.format(self.args.env_name), evaluate_rewards[-1],
+                    ep_reward, ep_len = self.evaluate_policy()
+                    print("total_steps:{} \t ep_reward:{} \t ep_len:{} \t".format(total_steps, ep_reward, ep_len))
+                    writer.add_scalar('step_reward_{}'.format(self.args.env_name), ep_reward,
                                       global_step=total_steps)
-                    # Save the rewards
+                    writer.add_scalar('step_len_{}'.format(self.args.env_name), ep_len,
+                                      global_step=total_steps)
+                    # Save the model
                     if evaluate_num % self.args.save_freq == 0:
                         model_dir = os.path.join(log_path, f'./data_train/{self.model_name}.npy')
-                        np.save(model_dir, np.array(evaluate_rewards))
+                        pass
                 if terminated or truncated:
                     break
 

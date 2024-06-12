@@ -41,7 +41,14 @@ class Normalization:
             obs['desired_goal'] = x[obs['observation'].shape[0]:]
             return obs
         return x
+    
+    def save(self, path):
+        np.save(path, [self.running_ms.mean, self.running_ms.std])
 
+    def load(self, path):
+        mean, std = np.load(path, allow_pickle=True)
+        self.running_ms.mean = mean
+        self.running_ms.std = std
 
 class RewardScaling:
     def __init__(self, shape, gamma):
