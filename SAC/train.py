@@ -30,12 +30,10 @@ class Config:
         # Net Params
         parser.add_argument("--hidden_dim", type=int, default=256,
                             help="The number of neurons in hidden layers of the neural network")
-        parser.add_argument("--actor_lr", type=float, default=3e-4, help="Learning rate of actor")
-        parser.add_argument("--critic_lr", type=float, default=3e-4, help="Learning rate of critic")
-        parser.add_argument("--alpha_lr", type=float, default=3e-4, help="Learning rate of alpha")
+        parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate of actor")
         parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
         parser.add_argument("--tau", type=float, default=0.005, help="Softly update the target network")
-        parser.add_argument("--k_epochs", type=int, default=10, help="更新策略网络的次数")
+
         parser.add_argument("--use_state_norm", type=bool, default=False, help="Trick 2:state normalization")
 
         return parser.parse_args()
@@ -105,14 +103,14 @@ class SACModel(ModelBase):
 def make_env(args):
     """ 配置智能体和环境 """
     env = gym.make(args.env_name)  # 创建环境
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+    n_states = env.observation_space.shape[0]
+    n_actions = env.action_space.shape[0]
     max_action = env.action_space.high[0]
-    print(f"state dim:{state_dim}, action dim:{action_dim}, max action:{max_action}")
+    print(f"state dim:{n_states}, action dim:{n_actions}, max action:{max_action}")
 
     # 更新n_states, max_action和n_actions到cfg参数中
-    setattr(args, 'state_dim', state_dim)
-    setattr(args, 'action_dim', action_dim)
+    setattr(args, 'n_states', n_states)
+    setattr(args, 'n_actions', n_actions)
     setattr(args, 'max_action', max_action)
 
     return env

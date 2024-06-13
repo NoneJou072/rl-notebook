@@ -11,11 +11,11 @@ class Actor(nn.Module):
     def __init__(self, args) -> None:
         super().__init__()
         self.max_action = args.max_action
-        self.fc1 = nn.Linear(args.state_dim, args.hidden_dim)
+        self.fc1 = nn.Linear(args.n_states, args.hidden_dim)
         self.fc2 = nn.Linear(args.hidden_dim, args.hidden_dim)
-        self.fc3 = nn.Linear(args.hidden_dim, args.action_dim)
+        self.fc3 = nn.Linear(args.hidden_dim, args.n_actions)
         # We use 'nn.Parameter' to train log_std automatically
-        self.log_std = nn.Parameter(torch.zeros(1, args.action_dim))
+        self.log_std = nn.Parameter(torch.zeros(1, args.n_actions))
 
     def forward(self, s, deterministic=False):
         s = F.relu(self.fc1(s))
@@ -49,11 +49,11 @@ class Critic(nn.Module):
     def __init__(self, args):
         super().__init__()
         # Q0
-        self.fc1 = nn.Linear(args.state_dim + args.action_dim, args.hidden_dim)
+        self.fc1 = nn.Linear(args.n_states + args.n_actions, args.hidden_dim)
         self.fc2 = nn.Linear(args.hidden_dim, args.hidden_dim)
         self.fc3 = nn.Linear(args.hidden_dim, 1)
         # Q1
-        self.fc4 = nn.Linear(args.state_dim + args.action_dim, args.hidden_dim)
+        self.fc4 = nn.Linear(args.n_states + args.n_actions, args.hidden_dim)
         self.fc5 = nn.Linear(args.hidden_dim, args.hidden_dim)
         self.fc6 = nn.Linear(args.hidden_dim, 1)
 
@@ -76,35 +76,33 @@ class SAC:
     """
 
     def __init__(self, args):
-        super(SAC, self).__init__(args)
+
         self.agent_name = 'SAC'
 
         self.tau = args.tau
-        self.actor_lr = args.actor_lr
-        self.critic_lr = args.critic_lr
-        self.alpha_lr = args.alpha_lr
+        self.lr = args.lr
         self.gamma = args.gamma  # discount factor
         self.max_action = args.max_action
-
+        self.device = args.device
         self.batch_size = args.batch_size
         self.buffer_size = args.buffer_size
-        self.memory = ReplayBuffer(self.buffer_size)
+        self.memory = ReplayBuffer(self.buffer_size, device=self.device)
 
-        self.target_entropy = -args.action_dim
-        self.log_alpha = torch.zeros(1, requires_grad=True)
+        self.target_entropy = -args.n_actions
+        self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
         self.alpha = self.log_alpha.exp()
-        self.alpha_optimizer = torch.optim.Adam([self.log_alpha], self.alpha_lr)
+        self.alpha_optimizer = torch.optim.Adam([self.log_alpha], self.lr)
 
-        self.actor = Actor(args)
-        self.critic = Critic(args)
+        self.actor = Actor(args).to(self.device)
+        self.critic = Critic(args).to(self.device)
         self.target_critic = copy.deepcopy(self.critic)
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=args.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=args.critic_lr)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
 
     def sample_action(self, s, deterministic=False):
-        s = torch.unsqueeze(torch.tensor(s, dtype=torch.float), 0)
+        s = torch.unsqueeze(torch.tensor(s, dtype=torch.float), 0).to(self.device)
         a, _ = self.actor.forward(s, deterministic)
-        return a.detach().numpy().flatten()
+        return a.cpu().detach().numpy().flatten()
 
     def update(self):
         s, a, s_, r, terminated, _ = self.memory.sample(self.batch_size, with_log=False)
@@ -155,3 +153,5 @@ class SAC:
         # Softly update target networks
         for param, target_param in zip(self.critic.parameters(), self.target_critic.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+
+        return actor_loss.item(), critic_loss.item()
