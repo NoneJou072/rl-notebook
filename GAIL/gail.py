@@ -45,7 +45,10 @@ class GAIL:
         expert_states = torch.tensor(expert_s, dtype=torch.float).to(self.device)
         expert_actions = torch.tensor(expert_a).to(self.device)
 
-        agent_states, agent_actions, _, _, _, _, _ = memory_buffer.sample()
+        if len(memory_buffer.buffer[0]) == 6: 
+            agent_states, agent_actions, _, _, _, _ = memory_buffer.sample(with_log=False)
+        else:
+            agent_states, agent_actions, _, _, _, _, _ = memory_buffer.sample()
         
         criterion = torch.nn.BCELoss()
 
@@ -75,5 +78,5 @@ class GAIL:
         action = torch.tensor(np.expand_dims(action, axis=0), dtype=torch.float32).to(self.device)
         agent_prob = self.discriminator(state, action)
         with torch.no_grad():
-            return -torch.log(agent_prob).detach().cpu().numpy()
+            return -torch.log(agent_prob + 1e-8).detach().cpu().numpy().item()
     
