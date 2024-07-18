@@ -19,7 +19,8 @@ class Actor(nn.Module):
         self.max_action = args.max_action
         self.fc1 = nn.Linear(args.n_states, args.hidden_dim)
         self.fc2 = nn.Linear(args.hidden_dim, args.hidden_dim)
-        self.fc3 = nn.Linear(args.hidden_dim, args.n_actions)
+        self.fc3 = nn.Linear(args.hidden_dim, args.hidden_dim)
+        self.fc4 = nn.Linear(args.hidden_dim, args.n_actions)
         self.log_std = nn.Parameter(
             torch.zeros(1, args.n_actions))  # We use 'nn.Parameter' to train log_std automatically
         
@@ -27,13 +28,15 @@ class Actor(nn.Module):
             print("------use_orthogonal_init------")
             orthogonal_init(self.fc1)
             orthogonal_init(self.fc2)
-            orthogonal_init(self.fc3, gain=0.01)
+            orthogonal_init(self.fc3)
+            orthogonal_init(self.fc4, gain=0.01)
 
     def forward(self, s):
         s = F.tanh(self.fc1(s))
         s = F.tanh(self.fc2(s))
+        s = F.tanh(self.fc3(s))
         # 将网络输出的 action 规范在 (-max_action， max_action) 之间
-        mean = self.max_action * torch.tanh(self.fc3(s))
+        mean = self.max_action * torch.tanh(self.fc4(s))
         return mean
 
     def get_dist(self, s):
@@ -132,8 +135,8 @@ class PPO_continuous:
         for _ in range(self.k_epochs):
             # Random sampling and no repetition. 'False' indicates that training will continue even if the number of
             # samples in the last time is less than mini_batch_size
-            if self.memory.__len__() < self.buffer_size:
-                buffer_size = self.memory.__len__()
+            if len(self.memory) < self.buffer_size:
+                buffer_size = len(self.memory)
             else: 
                 buffer_size = self.buffer_size
 
@@ -153,7 +156,7 @@ class PPO_continuous:
                 actor_loss = -torch.min(surr1, surr2) - self.entropy_coef * dist_entropy
                 self.actor_optimizer.zero_grad()
                 actor_loss.mean().backward()
-                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
+                # torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
                 self.actor_optimizer.step()
 
                 # compute critic loss
@@ -163,12 +166,15 @@ class PPO_continuous:
                 # take gradient step
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
+                # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
                 self.critic_optimizer.step()
 
         if self.use_lr_decay:
-            self.lr_decay(total_steps)
-        return actor_loss.mean().item(), critic_loss.item()
+            lr_now = self.lr_decay(total_steps)
+        else:
+            lr_now = self.lr
+
+        return actor_loss.mean().item(), critic_loss.item(), lr_now
 
     def lr_decay(self, total_steps):
         lr_now = self.lr * (1 - total_steps / self.max_train_steps)
@@ -176,3 +182,4 @@ class PPO_continuous:
             p['lr'] = lr_now
         for p in self.critic_optimizer.param_groups:
             p['lr'] = lr_now
+        return lr_now

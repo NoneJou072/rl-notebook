@@ -76,6 +76,8 @@ class GAIL:
     def get_reward(self, state: np.ndarray, action: np.ndarray):
         state = torch.tensor(np.expand_dims(state, axis=0), dtype=torch.float32).to(self.device)
         action = torch.tensor(np.expand_dims(action, axis=0), dtype=torch.float32).to(self.device)
+        # agent_prob 越接近 0，说明判别器认为这个动作-状态对是专家的
+        # 因此我们需要对这个概率取负对数，作为奖励值
         agent_prob = self.discriminator(state, action)
         with torch.no_grad():
             return -torch.log(agent_prob + 1e-8).detach().cpu().numpy().item()

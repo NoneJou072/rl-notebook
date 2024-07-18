@@ -107,10 +107,12 @@ def train(args):
     discriminator = GAIL(args)
 
     train_discrim_flag = True
-    discrim_loss, expert_acc, learner_acc = 0, 0, 0
+    discrim_loss, expert_acc, learner_acc, discrim_ep_score = 0, 0, 0, 0
 
+    total_timesteps = 0
     for epoch in range(args.n_epochs):
         
+        discrim_ep_score = 0
         return_list = []
         generator.memory.clear()
         generator.actor.eval()
@@ -126,15 +128,19 @@ def train(args):
                 if args.use_state_norm:
                     obs["observation"] = state_norm(obs["observation"])
 
-                discrim_ep_score = 0
-                while True:
+                for ep_step in range(args.max_episode_horizon):
                     action, a_logprob = generator.sample_action(obs["observation"])
-                    next_obs, reward, termination, truncation, _ = env.step(action)
+                    next_obs, reward, _, _, info = env.step(action)
                     
                     if args.use_state_norm:
                         next_obs["observation"] = state_norm(next_obs["observation"])
 
                     irl_reward = discriminator.get_reward(obs["observation"], action)
+
+                    termination = info["is_success"]
+                    truncation = False
+                    if ep_step == args.max_episode_horizon - 1:
+                        truncation = True
 
                     generator.memory.push((
                         obs["observation"], action, a_logprob, next_obs["observation"], irl_reward, termination, truncation
@@ -143,12 +149,11 @@ def train(args):
                     obs = next_obs
                     episode_return += reward
                     discrim_ep_score += irl_reward
+                    total_timesteps += 1
 
-                    if termination or truncation:
-                        break
                 return_list.append(episode_return)
                 pbar.set_postfix({'return': '%.3f' % np.mean(return_list[-10:])})
-                pbar.update(1)
+                pbar.update(total_timesteps)
 
         # START TRAINING
         generator.actor.train()
@@ -157,20 +162,22 @@ def train(args):
 
         if train_discrim_flag:
             discrim_loss, expert_acc, learner_acc = discriminator.learn(expert_obs, expert_a, generator.memory)
-            print("Discriminator loss: %.2f, Expert: %.2f%% | Learner: %.2f%% | ep_score: %.2f" % (discrim_loss, expert_acc * 100, learner_acc * 100, discrim_ep_score))
+            print("Discriminator loss: %.2f, Expert: %.2f%% | Learner: %.2f%% | ep_score: %.2f" % (
+                discrim_loss, expert_acc * 100, learner_acc * 100, discrim_ep_score / args.n_episodes)
+            )
             # if expert_acc > args.suspend_accu_exp and learner_acc > args.suspend_accu_gen:
             #     train_discrim_flag = False
 
-        actor_loss, critic_loss = generator.update()
+        actor_loss, critic_loss, lr = generator.update(total_timesteps)
 
-        if epoch % 10 == 0: 
+        if epoch % args.save_freq == 0: 
             # Save the Actor weights
             model_dir = os.path.join(log_path, f'./data_train')
             if not os.path.exists(model_dir):
                 os.makedirs(model_dir)
             torch.save(generator.actor.state_dict(), os.path.join(model_dir, f'GAILPPO_{epoch}.pth'))
             if args.use_state_norm:
-                state_norm.save(os.path.join(log_path, f'./data_train/state_norm_{epoch}.npy'))
+                state_norm.save(os.path.join(model_dir, f'state_norm_{epoch}.npy'))
             print("Model saved!")
         
         writer.add_scalar('discriminator/discrim_loss', discrim_loss, global_step=epoch)
@@ -179,12 +186,13 @@ def train(args):
         writer.add_scalar('generator/critic_loss', critic_loss, global_step=epoch)
         writer.add_scalar('generator/actor_loss', actor_loss, global_step=epoch)
         writer.add_scalar('generator/rollout_success', rollout_success, global_step=epoch)
-        writer.add_scalar('generator/discrim_ep_score', discrim_ep_score, global_step=epoch)
+        writer.add_scalar('generator/discrim_ep_score', discrim_ep_score / args.n_episodes, global_step=epoch)
+        writer.add_scalar('generator/lr', lr, global_step=epoch)
 
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
-    args.add_argument("--data_path", type=str, default="/home/ubuntu/zhr/robopal/robopal/collections/collections_1717654238_740447/demo.hdf5")
+    args.add_argument("--data_path", type=str, default="/home/ubuntu/zhr/robopal/robopal/collections/collections_1718681289_7812529/demo.hdf5")
 
     # PPO
     # Env Params
@@ -193,24 +201,23 @@ if __name__ == '__main__':
     args.add_argument("--seed", type=int, default=10, help="random seed")
     args.add_argument("--device", type=str, default=device, help="pytorch device")
     # Training Params
-    args.add_argument("--n_epochs", type=int, default=int(5e3), help=" Maximum number of training steps")
-    args.add_argument("--n_episodes", type=int, default=80, help=" Maximum number of training steps")
-    args.add_argument("--max_episode_horizon", type=int, default=int(1e3), help=" Maximum number of training steps")
+    args.add_argument("--n_epochs", type=int, default=int(2e3), help="Maximum number of training steps")
+    args.add_argument("--n_episodes", type=int, default=10, help="Maximum number of training steps")
+    args.add_argument("--max_train_steps", type=int, default=int(2e7), help="Maximum number of training steps")
+    args.add_argument("--max_episode_horizon", type=int, default=int(200), help="Maximum number of training steps")
     args.add_argument("--save_freq", type=int, default=20, help="Save frequency")
-    args.add_argument("--update_freq", type=int, default=512, help="Update frequency")
-    args.add_argument("--buffer_size", type=int, default=4096, help="Reply buffer size")
-    args.add_argument("--mini_batch_size", type=int, default=512, help="Minibatch size")
+    args.add_argument("--buffer_size", type=int, default=2560, help="Reply buffer size")
+    args.add_argument("--mini_batch_size", type=int, default=64, help="Minibatch size")
     # Net Params
-    args.add_argument("--hidden_dim", type=int, default=256,
-                        help="The number of neurons in hidden layers of the neural network")
-    args.add_argument("--lr", type=float, default=1e-4, help="Learning rate in PPO")
-    args.add_argument("--lr_discrim", type=float, default=1e-4, help="Learning rate in Discriminator")
-    args.add_argument("--gamma", type=float, default=0.97, help="Discount factor")
-    args.add_argument("--gae_lambda", type=float, default=0.98, help="GAE parameter")
+    args.add_argument("--hidden_dim", type=int, default=256, help="The number of neurons in hidden layers of the neural network")
+    args.add_argument("--lr", type=float, default=3e-4, help="Learning rate in PPO")
+    args.add_argument("--lr_discrim", type=float, default=3e-4, help="Learning rate in Discriminator")
+    args.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
+    args.add_argument("--gae_lambda", type=float, default=0.95, help="GAE parameter")
     args.add_argument("--eps_clip", type=float, default=0.2, help="PPO clip parameter-epsilon-clip")
     args.add_argument("--k_epochs", type=int, default=10, help="PPO parameter, 更新策略网络的次数")
     args.add_argument("--entropy_coef", type=float, default=1e-2, help="policy entropy")
-    args.add_argument("--max_grad_norm", type=float, default=0.5, help="max_grad_norm")
+    args.add_argument("--max_grad_norm", type=float, default=1.0, help="max_grad_norm")
 
     # Optim tricks， reference by https://zhuanlan.zhihu.com/p/512327050
     args.add_argument("--use_state_norm", type=bool, default=True, help="Trick 2:state normalization")
